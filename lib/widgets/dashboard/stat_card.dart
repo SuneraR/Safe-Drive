@@ -7,6 +7,9 @@ class StatCard extends StatelessWidget {
   final Color iconBgColor;
   final Color iconColor;
 
+  static const Color _surfaceColor = Color(0xFF1C1C1E);
+  static const Color _textSecondary = Color(0xFFA0A0A0);
+
   const StatCard({
     super.key,
     required this.icon,
@@ -22,7 +25,7 @@ class StatCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1D2E),
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -47,10 +50,7 @@ class StatCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: _textSecondary, fontSize: 13),
                 ),
                 const SizedBox(height: 5),
                 Text(
