@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:vibration/vibration.dart';
 
 import '../controllers/fatigue_monitoring_controller.dart';
 import '../services/fatigue_detection_service.dart';
@@ -17,6 +19,7 @@ class Dashboard extends StatefulWidget {
 
 class _DashboardState extends State<Dashboard> {
   late final FatigueMonitoringController _fatigueController;
+  late final AudioPlayer _warningPlayer;
 
   static const Color _bgColor = Color(0xFF121212);
   static const Color _textSecondary = Color(0xFFA0A0A0);
@@ -24,6 +27,8 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
+
+    _warningPlayer = AudioPlayer();
 
     _fatigueController = FatigueMonitoringController(
       service: FatigueDetectionService(),
@@ -33,6 +38,7 @@ class _DashboardState extends State<Dashboard> {
 
   @override
   void dispose() {
+    _warningPlayer.dispose();
     _fatigueController.dispose();
     super.dispose();
   }
@@ -54,8 +60,14 @@ class _DashboardState extends State<Dashboard> {
 
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
-    await HapticFeedback.heavyImpact();
-    SystemSound.play(SystemSoundType.alert);
+    if (await Vibration.hasVibrator() ?? false) {
+      await Vibration.vibrate(duration: 600, amplitude: 255);
+    } else {
+      await HapticFeedback.heavyImpact();
+    }
+
+    await _warningPlayer.stop();
+    await _warningPlayer.play(AssetSource('sounds/warning.mp3'));
 
     final bool critical = update.level == FatigueRiskLevel.critical;
     final String prefix = critical
