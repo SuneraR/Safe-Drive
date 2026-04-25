@@ -1,83 +1,344 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
-class LiveMonitoringScreen extends StatelessWidget {
+enum CameraLensDirection { front, back, external }
+
+enum ResolutionPreset { low }
+
+enum ImageFormatGroup { nv21 }
+
+class CameraDescription {
+  const CameraDescription({required this.lensDirection});
+
+  final CameraLensDirection lensDirection;
+}
+
+class CameraImagePlane {
+  CameraImagePlane(this.bytes, {this.bytesPerRow = 0});
+
+  final Uint8List bytes;
+  final int bytesPerRow;
+}
+
+class CameraImage {
+  CameraImage({
+    required this.width,
+    required this.height,
+    required this.planes,
+  });
+
+  final int width;
+  final int height;
+  final List<CameraImagePlane> planes;
+}
+
+class CameraValue {
+  const CameraValue({required this.isInitialized});
+
+  final bool isInitialized;
+}
+
+class CameraController {
+  CameraController(
+    this.description,
+    this.resolutionPreset, {
+    required this.enableAudio,
+    required this.imageFormatGroup,
+  }) : value = const CameraValue(isInitialized: false);
+
+  final CameraDescription description;
+  final ResolutionPreset resolutionPreset;
+  final bool enableAudio;
+  final ImageFormatGroup imageFormatGroup;
+  final CameraValue value;
+
+  Future<void> initialize() async {}
+
+  Future<void> startImageStream(
+    Future<void> Function(CameraImage image) onAvailable,
+  ) async {}
+
+  Future<void> dispose() async {}
+}
+
+Future<List<CameraDescription>> availableCameras() async =>
+    const [CameraDescription(lensDirection: CameraLensDirection.front)];
+
+class CameraPreview extends StatelessWidget {
+  const CameraPreview(this.controller, {super.key});
+
+  final CameraController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Icon(Icons.videocam, color: Colors.white54, size: 48),
+      ),
+    );
+  }
+}
+
+class LiveMonitoringScreen extends StatefulWidget {
   const LiveMonitoringScreen({super.key});
 
-  static const Color _bgColor = Color(0xFF121212);
-  static const Color _surfaceColor = Color(0xFF1C1C1E);
-  static const Color _textSecondary = Color(0xFFA0A0A0);
-  static const Color _accentGreen = Color(0xFF65F58B);
-  static const Color _accentYellow = Color(0xFFFFD60A);
-  static const Color _accentRed = Color(0xFFFF453A);
+  @override
+  State<LiveMonitoringScreen> createState() => _LiveMonitoringScreenState();
+}
+
+class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
+    with WidgetsBindingObserver {
+
+  CameraController? _controller;
+  List<CameraDescription>? cameras;
+
+  late FaceDetector _faceDetector;
+  FlutterTts flutterTts = FlutterTts();
+
+  bool isProcessing = false;
+  DateTime? lastProcessed;
+
+  int frameSkip = 0;
+
+  // 👁️ Eye detection
+  bool eyesClosed = false;
+  int closedEyeFrames = 0;
+
+  // ⚡ Fatigue
+  String fatigueStatus = "Normal";
+
+  // ⏱️ Timer
+  DateTime? eyesClosedStart;
+  bool alertShown = false;
+
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    initCamera();
+
+    _faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+        enableClassification: true,
+        performanceMode: FaceDetectorMode.fast,
+      ),
+    );
+
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      checkEyeClosure();
+    });
+  }
+
+  Future<void> initCamera() async {
+    cameras = await availableCameras();
+
+    final frontCamera = cameras!.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.front,
+    );
+
+    _controller = CameraController(
+      frontCamera,
+      ResolutionPreset.low,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.nv21,
+    );
+
+    await _controller!.initialize();
+
+    _controller!.startImageStream(processCameraImage);
+
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  /// 🔥 ML PROCESS
+  Future<void> processCameraImage(CameraImage image) async {
+    if (isProcessing) return;
+
+    frameSkip++;
+    if (frameSkip % 3 != 0) return;
+
+    final now = DateTime.now();
+    if (lastProcessed != null &&
+        now.difference(lastProcessed!).inMilliseconds < 700) {
+      return;
+    }
+
+    lastProcessed = now;
+    isProcessing = true;
+
+    try {
+      final bytes = Uint8List.fromList(
+        image.planes.expand((plane) => plane.bytes).toList(),
+      );
+
+      final inputImage = InputImage.fromBytes(
+        bytes: bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: InputImageRotation.rotation270deg,
+          format: InputImageFormat.nv21,
+          bytesPerRow: image.planes.first.bytesPerRow,
+        ),
+      );
+
+      final faces = await _faceDetector.processImage(inputImage);
+
+      if (faces.isNotEmpty) {
+        final face = faces.first;
+
+        final left = face.leftEyeOpenProbability ?? 1.0;
+        final right = face.rightEyeOpenProbability ?? 1.0;
+
+        if (left < 0.6 && right < 0.6) {
+          closedEyeFrames++;
+        } else {
+          closedEyeFrames = 0;
+        }
+
+        eyesClosed = closedEyeFrames > 2;
+      }
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      print("ML ERROR: $e");
+    }
+
+    isProcessing = false;
+  }
+
+  /// 🔥 FATIGUE + ALERT LOGIC (FIXED)
+  void checkEyeClosure() {
+    if (eyesClosed) {
+      if (eyesClosedStart == null) {
+        eyesClosedStart = DateTime.now();
+      }
+
+      final duration = DateTime.now().difference(eyesClosedStart!);
+
+      setState(() {
+        if (duration.inSeconds >= 5) {
+          fatigueStatus = "Sleepy 😴";
+        } else {
+          fatigueStatus = "Drowsy 😐";
+        }
+      });
+
+      if (duration.inSeconds >= 5 && !alertShown) {
+        alertShown = true;
+
+        print("ALERT TRIGGERED");
+
+        // ✅ FIXED SAFE UI CALL
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showAlert();
+          speakAlert();
+        });
+      }
+
+    } else {
+      setState(() {
+        fatigueStatus = "Normal 😊";
+      });
+
+      eyesClosedStart = null;
+      alertShown = false;
+    }
+  }
+
+  /// 🔊 VOICE ALERT
+  Future<void> speakAlert() async {
+    await flutterTts.setLanguage("en-US");
+    await flutterTts.setSpeechRate(0.5);
+    await flutterTts.speak(
+        "Driver wake up. You appear tired. Please stay alert.");
+  }
+
+  /// 🚨 ALERT UI (SAFE)
+  void showAlert() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: const Text("Wake Up!",
+            style: TextStyle(color: Colors.red)),
+        content: const Text(
+          "You look drowsy. Please stay alert!",
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              alertShown = false;
+            },
+            child: const Text("OK",
+                style: TextStyle(color: Colors.green)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    _controller?.dispose();
+    _faceDetector.close();
+    flutterTts.stop();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgColor,
+      backgroundColor: const Color(0xFF0D0F1A),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    "Live Monitoring",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  const Text("Live Monitoring",
+                      style: TextStyle(color: Colors.white)),
                   IconButton(
-                    style: IconButton.styleFrom(
-                      backgroundColor: _surfaceColor,
-                      foregroundColor: Colors.white,
-                    ),
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                  ),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  )
                 ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                "Real-time fatigue tracking",
-                style: TextStyle(color: _textSecondary, fontSize: 16),
-              ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+
               _statusSection(),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 40),
 
               Container(
-                width: double.infinity,
+                width: 190,
                 height: 280,
-                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: _surfaceColor,
-                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.greenAccent, width: 3),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Center(
-                  child: Container(
-                    width: 220,
-                    height: 220,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _accentGreen, width: 3),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(left: 65, top: 95, child: _dot()),
-                        Positioned(right: 65, top: 95, child: _dot()),
-                      ],
-                    ),
-                  ),
-                ),
+                child: _controller == null ||
+                        !_controller!.value.isInitialized
+                    ? const Center(child: CircularProgressIndicator())
+                    : CameraPreview(_controller!),
               ),
 
               const Spacer(),
@@ -87,33 +348,12 @@ class LiveMonitoringScreen extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _accentRed,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        minimumSize: const Size(double.infinity, 56),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                        backgroundColor: Colors.red,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        "Stop Monitoring",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Stop Monitoring"),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  FloatingActionButton(
-                    backgroundColor: _accentYellow,
-                    foregroundColor: _bgColor,
-                    elevation: 0,
-                    onPressed: () {},
-                    child: const Icon(Icons.call),
                   ),
                 ],
               ),
@@ -126,36 +366,27 @@ class LiveMonitoringScreen extends StatelessWidget {
 
   Widget _statusSection() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: _surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        color: const Color(0xFF1A1C2E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blueAccent),
       ),
       child: Row(
         children: [
+
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Row(
-                    children: [
-                      Icon(Icons.remove_red_eye, size: 10, color: _accentGreen),
-                      SizedBox(width: 6),
-                      Text(
-                        "Eye Status",
-                        style: TextStyle(color: _textSecondary, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
+                children: [
+                  const Text("Eye Status",
+                      style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 5),
                   Text(
-                    "Eyes Open",
+                    eyesClosed ? "Closed 🔴" : "Open 🟢",
                     style: TextStyle(
-                      color: _accentGreen,
-                      fontSize: 18,
+                      color: eyesClosed ? Colors.red : Colors.greenAccent,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -164,30 +395,25 @@ class LiveMonitoringScreen extends StatelessWidget {
             ),
           ),
 
-          Container(width: 1, height: 56, color: Colors.white.withOpacity(0.1)),
+          Container(width: 1, height: 50, color: Colors.grey),
 
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Row(
-                    children: [
-                      Icon(Icons.circle, size: 10, color: _accentGreen),
-                      SizedBox(width: 6),
-                      Text(
-                        "Fatigue Score",
-                        style: TextStyle(color: _textSecondary, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
+                children: [
+                  const Text("Fatigue Status",
+                      style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 5),
                   Text(
-                    "10%",
+                    fatigueStatus,
                     style: TextStyle(
-                      color: _accentGreen,
-                      fontSize: 18,
+                      color: fatigueStatus.contains("Normal")
+                          ? Colors.green
+                          : fatigueStatus.contains("Drowsy")
+                              ? Colors.orange
+                              : Colors.red,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -196,17 +422,6 @@ class LiveMonitoringScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _dot() {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: const BoxDecoration(
-        color: _accentGreen,
-        shape: BoxShape.circle,
       ),
     );
   }
