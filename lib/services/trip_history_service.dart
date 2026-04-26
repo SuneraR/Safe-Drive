@@ -93,6 +93,25 @@ class TripHistoryService {
     }
   }
 
+  Future<int> syncPendingTrips() async {
+    final List<TripRecord> records = await loadTrips();
+    int syncedCount = 0;
+
+    for (final TripRecord record in records) {
+      if (record.uploadedToFirebase) {
+        continue;
+      }
+
+      final bool uploaded = await _uploadToFirebase(record);
+      if (uploaded) {
+        await _markUploaded(record.id);
+        syncedCount++;
+      }
+    }
+
+    return syncedCount;
+  }
+
   Future<void> _saveLocally(TripRecord record) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final List<TripRecord> records = await loadTrips();

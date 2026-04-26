@@ -41,6 +41,7 @@ class _DashboardState extends State<Dashboard> {
     );
     _fatigueController.onWarning = _handleFatigueWarning;
     _fatigueController.state.addListener(_onFatigueStateChanged);
+    Future<void>.microtask(_syncPendingTrips);
   }
 
   @override
@@ -53,6 +54,10 @@ class _DashboardState extends State<Dashboard> {
 
   void _onFatigueStateChanged() {
     _latestFatigueScore = _fatigueController.state.value.score;
+  }
+
+  Future<void> _syncPendingTrips() async {
+    await _tripHistoryService.syncPendingTrips();
   }
 
   Future<void> _toggleRide() async {
