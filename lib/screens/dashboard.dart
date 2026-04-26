@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
-
 import '../controllers/fatigue_monitoring_controller.dart';
 import '../services/fatigue_detection_service.dart';
+import '../services/trip_history_service.dart';
 import '../widgets/dashboard/driver_status_card.dart';
 import '../widgets/dashboard/start_ride_button.dart';
 import '../widgets/dashboard/start_button.dart';
@@ -20,6 +20,11 @@ class Dashboard extends StatefulWidget {
 class _DashboardState extends State<Dashboard> {
   late final FatigueMonitoringController _fatigueController;
   late final AudioPlayer _warningPlayer;
+  late final TripHistoryService _tripHistoryService;
+
+  DateTime? _rideStartedAt;
+  int _fatigueAlertCount = 0;
+  double _latestFatigueScore = 0;
 
   static const Color _bgColor = Color(0xFF121212);
   static const Color _textSecondary = Color(0xFFA0A0A0);
@@ -29,28 +34,61 @@ class _DashboardState extends State<Dashboard> {
     super.initState();
 
     _warningPlayer = AudioPlayer();
+    _tripHistoryService = TripHistoryService();
 
     _fatigueController = FatigueMonitoringController(
       service: FatigueDetectionService(),
     );
     _fatigueController.onWarning = _handleFatigueWarning;
+    _fatigueController.state.addListener(_onFatigueStateChanged);
   }
 
   @override
   void dispose() {
+    _fatigueController.state.removeListener(_onFatigueStateChanged);
     _warningPlayer.dispose();
     _fatigueController.dispose();
     super.dispose();
   }
 
+  void _onFatigueStateChanged() {
+    _latestFatigueScore = _fatigueController.state.value.score;
+  }
+
   Future<void> _toggleRide() async {
     final bool active = _fatigueController.state.value.isRideActive;
     if (active) {
+      final DateTime stoppedAt = DateTime.now();
       await _fatigueController.stopRide();
+
+      final DateTime? startedAt = _rideStartedAt;
+      if (startedAt != null && stoppedAt.isAfter(startedAt)) {
+        await _tripHistoryService.persistTripAndUpload(
+          tripDuration: stoppedAt.difference(startedAt),
+          fatigueCount: _fatigueAlertCount,
+          fatigueScore: _latestFatigueScore,
+          tripDate: stoppedAt,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(
+                content: Text('Trip saved locally and upload attempted.'),
+              ),
+            );
+        }
+      }
+
+      _rideStartedAt = null;
       return;
     }
 
     await _fatigueController.startRide();
+    _rideStartedAt = DateTime.now();
+    _fatigueAlertCount = 0;
+    _latestFatigueScore = 0;
   }
 
   Future<void> _handleFatigueWarning(FatigueDetectionUpdate update) async {
@@ -58,9 +96,11 @@ class _DashboardState extends State<Dashboard> {
       return;
     }
 
+    _fatigueAlertCount++;
+
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
-    if (await Vibration.hasVibrator() ?? false) {
+    if (await Vibration.hasVibrator()) {
       await Vibration.vibrate(duration: 600, amplitude: 255);
     } else {
       await HapticFeedback.heavyImpact();
