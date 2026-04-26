@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:safe_drive/screens/history.dart';
 import 'screens/settings.dart';
 import 'screens/Dashboard.dart';
 import 'screens/login.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // App still runs if Firebase isn't configured in this build flavor.
+  }
+
   runApp(const MyApp());
 }
 
