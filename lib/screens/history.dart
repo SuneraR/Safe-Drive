@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:safe_drive/services/trip_history_service.dart';
 import 'package:safe_drive/widgets/history/history_trip_card.dart';
 import 'package:safe_drive/widgets/history/section_card.dart';
 import 'package:safe_drive/widgets/history/section_header.dart';
 import 'package:safe_drive/widgets/history/stat_value_tile.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
+
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  final TripHistoryService _tripHistoryService = TripHistoryService();
+  List<TripRecord> _recentTrips = <TripRecord>[];
+  bool _isLoadingTrips = true;
 
   final Color bgColor = const Color(0xFF121212);
   final Color cardBgColor = const Color(0xFF1C1C1E);
@@ -15,6 +25,201 @@ class HistoryScreen extends StatelessWidget {
   final Color accentBlue = const Color(0xFF64B5F6);
   final Color accentRed = const Color(0xFFFF453A);
   final Color textGrey = const Color(0xFF8E8E93);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrips();
+  }
+
+  Future<void> _loadTrips() async {
+    await _tripHistoryService.syncPendingTrips();
+    final List<TripRecord> trips = await _tripHistoryService.loadTrips();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _recentTrips = trips;
+      _isLoadingTrips = false;
+    });
+  }
+
+  String _formatDuration(int totalSeconds) {
+    final int hours = totalSeconds ~/ 3600;
+    final int minutes = (totalSeconds % 3600) ~/ 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m';
+  }
+
+  String _formatTripDate(DateTime tripDate) {
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final DateTime tripDay = DateTime(tripDate.year, tripDate.month, tripDate.day);
+    final Duration dayDiff = today.difference(tripDay);
+
+    final String hour = tripDate.hour.toString().padLeft(2, '0');
+    final String minute = tripDate.minute.toString().padLeft(2, '0');
+    if (dayDiff.inDays == 0) {
+      return 'Today, $hour:$minute';
+    }
+    if (dayDiff.inDays == 1) {
+      return 'Yesterday, $hour:$minute';
+    }
+
+    const List<String> months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final String month = months[tripDate.month - 1];
+    return '$month ${tripDate.day}, $hour:$minute';
+  }
+
+  String _statusLabel(double fatigueScore) {
+    if (fatigueScore >= 0.78) {
+      return 'High';
+    }
+    if (fatigueScore >= 0.58) {
+      return 'Moderate';
+    }
+    return 'Good';
+  }
+
+  Color _statusColor(double fatigueScore) {
+    if (fatigueScore >= 0.78) {
+      return accentRed;
+    }
+    if (fatigueScore >= 0.58) {
+      return accentYellow;
+    }
+    return accentGreen;
+  }
+
+  Widget _buildRecentTrips() {
+    if (_isLoadingTrips) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_recentTrips.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardBgColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'No trips found yet. Start and stop a ride to save your first trip.',
+          style: TextStyle(color: textGrey),
+        ),
+      );
+    }
+
+    return Column(
+      children: _recentTrips.take(10).map((TripRecord trip) {
+        return HistoryTripCard(
+          date: _formatTripDate(trip.tripDate),
+          duration: _formatDuration(trip.tripDurationSeconds),
+          alerts: trip.fatigueCount.toString(),
+          status: _statusLabel(trip.fatigueScore),
+          statusColor: _statusColor(trip.fatigueScore),
+          surfaceColor: cardBgColor,
+          textColor: textGrey,
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSummaryCard() {
+    final int totalTrips = _recentTrips.length;
+    final int totalAlerts = _recentTrips.fold(
+      0,
+      (int sum, TripRecord trip) => sum + trip.fatigueCount,
+    );
+    final int totalDurationSeconds = _recentTrips.fold(
+      0,
+      (int sum, TripRecord trip) => sum + trip.tripDurationSeconds,
+    );
+    final int totalHours = totalDurationSeconds ~/ 3600;
+    final double avgFatigue = totalTrips == 0
+        ? 0
+        : _recentTrips
+                .map((TripRecord trip) => trip.fatigueScore)
+                .reduce((double a, double b) => a + b) /
+            totalTrips;
+
+    return SectionCard(
+      surfaceColor: cardBgColor,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(
+            icon: Icons.calendar_today_outlined,
+            title: 'Saved Trips Summary',
+            accentColor: Color(0xFF32D74B),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: StatValueTile(
+                  label: 'Total Trips',
+                  value: totalTrips.toString(),
+                  labelColor: textGrey,
+                  valueColor: Colors.white,
+                ),
+              ),
+              Expanded(
+                child: StatValueTile(
+                  label: 'Total Alerts',
+                  value: totalAlerts.toString(),
+                  labelColor: textGrey,
+                  valueColor: accentYellow,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: StatValueTile(
+                  label: 'Driving Time',
+                  value: '${totalHours}h',
+                  labelColor: textGrey,
+                  valueColor: Colors.white,
+                ),
+              ),
+              Expanded(
+                child: StatValueTile(
+                  label: 'Avg Fatigue',
+                  value: '${(avgFatigue * 100).toStringAsFixed(0)}%',
+                  labelColor: textGrey,
+                  valueColor: accentGreen,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,33 +248,7 @@ class HistoryScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              HistoryTripCard(
-                date: 'Today, 2:30 PM',
-                duration: '2h 15m',
-                alerts: '3',
-                status: 'Moderate',
-                statusColor: accentYellow,
-                surfaceColor: cardBgColor,
-                textColor: textGrey,
-              ),
-              HistoryTripCard(
-                date: 'Yesterday, 8:00 AM',
-                duration: '1h 45m',
-                alerts: '1',
-                status: 'Good',
-                statusColor: accentGreen,
-                surfaceColor: cardBgColor,
-                textColor: textGrey,
-              ),
-              HistoryTripCard(
-                date: 'Feb 26, 6:00 PM',
-                duration: '3h 30m',
-                alerts: '7',
-                status: 'High',
-                statusColor: accentRed,
-                surfaceColor: cardBgColor,
-                textColor: textGrey,
-              ),
+              _buildRecentTrips(),
               const SizedBox(height: 80), // Bottom padding for navbar clearance
             ],
           ),
@@ -99,66 +278,96 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCard() {
-    return SectionCard(
-      surfaceColor: cardBgColor,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SectionHeader(
-            icon: Icons.calendar_today_outlined,
-            title: 'This Week Summary',
-            accentColor: Color(0xFF32D74B),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: StatValueTile(
-                  label: 'Total Trips',
-                  value: '24',
-                  labelColor: textGrey,
-                  valueColor: Colors.white,
-                ),
-              ),
-              Expanded(
-                child: StatValueTile(
-                  label: 'Total Alerts',
-                  value: '24',
-                  labelColor: textGrey,
-                  valueColor: accentYellow,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: StatValueTile(
-                  label: 'Driving Time',
-                  value: '42h',
-                  labelColor: textGrey,
-                  valueColor: Colors.white,
-                ),
-              ),
-              Expanded(
-                child: StatValueTile(
-                  label: 'Avg Fatigue',
-                  value: '28%',
-                  labelColor: textGrey,
-                  valueColor: accentGreen,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  List<FlSpot> _todayFatigueSpots() {
+    final DateTime now = DateTime.now();
+    final List<TripRecord> todayTrips = _recentTrips.where((TripRecord trip) {
+      return trip.tripDate.year == now.year &&
+          trip.tripDate.month == now.month &&
+          trip.tripDate.day == now.day;
+    }).toList()
+      ..sort((TripRecord a, TripRecord b) => a.tripDate.compareTo(b.tripDate));
+
+    final List<FlSpot> spots = todayTrips.map((TripRecord trip) {
+      final double x = trip.tripDate.hour + (trip.tripDate.minute / 60.0);
+      final double y = (trip.fatigueScore * 100).clamp(0.0, 100.0);
+      return FlSpot(x, y);
+    }).toList();
+
+    if (spots.isEmpty) {
+      return const <FlSpot>[FlSpot(0, 0), FlSpot(23, 0)];
+    }
+
+    if (spots.length == 1) {
+      return <FlSpot>[FlSpot(0, spots.first.y), FlSpot(23, spots.first.y)];
+    }
+
+    return spots;
+  }
+
+  double _lineChartMaxY(List<FlSpot> spots) {
+    double maxY = 0;
+    for (final FlSpot spot in spots) {
+      if (spot.y > maxY) {
+        maxY = spot.y;
+      }
+    }
+
+    if (maxY <= 20) {
+      return 20;
+    }
+
+    return ((maxY / 10).ceil() * 10).toDouble();
+  }
+
+  List<BarChartGroupData> _weeklyAlertBars() {
+    final DateTime now = DateTime.now();
+    final DateTime startDate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 6));
+
+    final List<double> alertsByWeekday = List<double>.filled(7, 0);
+    for (final TripRecord trip in _recentTrips) {
+      final DateTime date = trip.tripDate;
+      final DateTime day = DateTime(date.year, date.month, date.day);
+      if (day.isBefore(startDate)) {
+        continue;
+      }
+
+      final int weekdayIndex = date.weekday - 1; // Monday=0 ... Sunday=6
+      alertsByWeekday[weekdayIndex] += trip.fatigueCount;
+    }
+
+    return List<BarChartGroupData>.generate(7, (int index) {
+      return _makeBarData(index, alertsByWeekday[index]);
+    });
+  }
+
+  double _weeklyBarMaxY(List<BarChartGroupData> bars) {
+    double maxY = 0;
+    for (final BarChartGroupData bar in bars) {
+      if (bar.barRods.isEmpty) {
+        continue;
+      }
+
+      final double value = bar.barRods.first.toY;
+      if (value > maxY) {
+        maxY = value;
+      }
+    }
+
+    if (maxY < 4) {
+      return 4;
+    }
+
+    return (maxY + 1).ceilToDouble();
   }
 
   Widget _buildLineChartCard() {
+    final List<FlSpot> spots = _todayFatigueSpots();
+    final double maxY = _lineChartMaxY(spots);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -219,7 +428,7 @@ class HistoryScreen extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 22,
-                      interval: 2,
+                      interval: 4,
                       getTitlesWidget: (value, meta) {
                         return Padding(
                           padding: const EdgeInsets.only(top: 8.0),
@@ -234,7 +443,7 @@ class HistoryScreen extends StatelessWidget {
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      interval: 15,
+                      interval: maxY <= 40 ? 10 : 20,
                       reservedSize: 28,
                       getTitlesWidget: (value, meta) {
                         return Text(
@@ -259,20 +468,12 @@ class HistoryScreen extends StatelessWidget {
                   ),
                 ),
                 minX: 0,
-                maxX: 12,
+                maxX: 23,
                 minY: 0,
-                maxY: 60,
+                maxY: maxY,
                 lineBarsData: [
                   LineChartBarData(
-                    spots: const [
-                      FlSpot(0, 20),
-                      FlSpot(2, 35),
-                      FlSpot(4, 55),
-                      FlSpot(6, 40),
-                      FlSpot(8, 25),
-                      FlSpot(10, 15),
-                      FlSpot(12, 20),
-                    ],
+                    spots: spots,
                     isCurved: true,
                     color: accentBlue,
                     barWidth: 3,
@@ -290,6 +491,9 @@ class HistoryScreen extends StatelessWidget {
   }
 
   Widget _buildBarChartCard() {
+    final List<BarChartGroupData> barGroups = _weeklyAlertBars();
+    final double maxY = _weeklyBarMaxY(barGroups);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -313,7 +517,7 @@ class HistoryScreen extends StatelessWidget {
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: 8,
+                maxY: maxY,
                 barTouchData: BarTouchData(enabled: false),
                 titlesData: FlTitlesData(
                   show: true,
@@ -363,7 +567,7 @@ class HistoryScreen extends StatelessWidget {
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      interval: 2,
+                      interval: maxY <= 8 ? 1 : 2,
                       reservedSize: 20,
                       getTitlesWidget: (value, meta) {
                         return Text(
@@ -383,7 +587,7 @@ class HistoryScreen extends StatelessWidget {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: true,
-                  horizontalInterval: 2,
+                  horizontalInterval: maxY <= 8 ? 1 : 2,
                   getDrawingHorizontalLine: (value) => FlLine(
                     color: textGrey.withOpacity(0.15),
                     strokeWidth: 1,
@@ -408,15 +612,7 @@ class HistoryScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                barGroups: [
-                  _makeBarData(0, 2),
-                  _makeBarData(1, 5),
-                  _makeBarData(2, 3),
-                  _makeBarData(3, 1),
-                  _makeBarData(4, 4),
-                  _makeBarData(5, 6),
-                  _makeBarData(6, 3),
-                ],
+                barGroups: barGroups,
               ),
             ),
           ),
