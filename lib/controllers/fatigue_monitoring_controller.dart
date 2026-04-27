@@ -82,15 +82,18 @@ class FatigueMonitoringController {
       return;
     }
 
-    await _service.stop();
-    _lastWarningAt = null;
-    state.value = const FatigueMonitorState(
-      isRideActive: false,
-      level: FatigueRiskLevel.normal,
-      score: 0,
-      reason: 'Ride stopped. Monitoring paused.',
-      lastUpdated: null,
-    );
+    try {
+      await _service.stop();
+    } finally {
+      _lastWarningAt = null;
+      state.value = const FatigueMonitorState(
+        isRideActive: false,
+        level: FatigueRiskLevel.normal,
+        score: 0,
+        reason: 'Ride stopped. Monitoring paused.',
+        lastUpdated: null,
+      );
+    }
   }
 
   Future<void> dispose() async {

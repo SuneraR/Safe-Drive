@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:isolate';
 import 'dart:math' as math;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 enum FatigueRiskLevel { normal, warning, critical }
@@ -45,6 +48,13 @@ class FatigueDetectionService {
   DateTime? _lastAccelerometerSampleAt;
   DateTime? _lastGyroscopeSampleAt;
 
+  String? _sessionId;
+  DateTime? _sessionStartedAt;
+  int _sessionUpdateCount = 0;
+  double _sessionHighestScore = 0;
+  FatigueRiskLevel _sessionHighestLevel = FatigueRiskLevel.normal;
+  FatigueDetectionUpdate? _lastUpdate;
+
   bool _isRunning = false;
   bool _isEvaluating = false;
 
@@ -57,7 +67,15 @@ class FatigueDetectionService {
     }
 
     _isRunning = true;
+    _sessionId = DateTime.now().microsecondsSinceEpoch.toString();
+    _sessionStartedAt = DateTime.now();
+    _sessionUpdateCount = 0;
+    _sessionHighestScore = 0;
+    _sessionHighestLevel = FatigueRiskLevel.normal;
+    _lastUpdate = null;
     _clearWindows();
+
+    unawaited(_createSessionSkeleton());
 
     _accelerometerSub = accelerometerEventStream().listen(
       _onAccelerometerEvent,
@@ -84,7 +102,15 @@ class FatigueDetectionService {
     _evaluationTimer?.cancel();
     _evaluationTimer = null;
 
+    await _saveSessionSummary();
+
     _clearWindows();
+    _sessionId = null;
+    _sessionStartedAt = null;
+    _sessionUpdateCount = 0;
+    _sessionHighestScore = 0;
+    _sessionHighestLevel = FatigueRiskLevel.normal;
+    _lastUpdate = null;
   }
 
   Future<void> dispose() async {
@@ -164,14 +190,24 @@ class FatigueDetectionService {
             FatigueRiskLevel.values.length - 1,
           )];
 
-      _updatesController.add(
-        FatigueDetectionUpdate(
-          score: output['score'] as double,
-          level: level,
-          reason: output['reason'] as String,
-          timestamp: DateTime.now(),
-        ),
+      final FatigueDetectionUpdate update = FatigueDetectionUpdate(
+        score: output['score'] as double,
+        level: level,
+        reason: output['reason'] as String,
+        timestamp: DateTime.now(),
       );
+
+      _updatesController.add(update);
+      _lastUpdate = update;
+      _sessionUpdateCount++;
+      if (update.score >= _sessionHighestScore) {
+        _sessionHighestScore = update.score;
+      }
+      if (update.level.index >= _sessionHighestLevel.index) {
+        _sessionHighestLevel = update.level;
+      }
+
+      await _persistUpdate(update);
     } finally {
       _isEvaluating = false;
     }
@@ -190,6 +226,131 @@ class FatigueDetectionService {
     _pitchWindow.clear();
     _lastAccelerometerSampleAt = null;
     _lastGyroscopeSampleAt = null;
+  }
+
+  Future<void> _persistUpdate(FatigueDetectionUpdate update) async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null || _sessionId == null) {
+      developer.log(
+        'Skipping fatigue update write because user/session is missing.',
+        name: 'FatigueDetectionService',
+      );
+      return;
+    }
+
+    try {
+      final String recordId = update.timestamp.microsecondsSinceEpoch
+          .toString();
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('fatigue_sessions')
+          .doc(_sessionId)
+          .collection('updates')
+          .doc(recordId)
+          .set(<String, Object?>{
+            'uid': user.uid,
+            'sessionId': _sessionId,
+            'score': update.score,
+            'level': update.level.name,
+            'reason': update.reason,
+            'timestamp': Timestamp.fromDate(update.timestamp),
+            'createdAt': FieldValue.serverTimestamp(),
+            'isAlert': update.level != FatigueRiskLevel.normal,
+          });
+    } catch (error, stackTrace) {
+      // Stop the ride even if this write fails; the user-facing flow must stay responsive.
+      developer.log(
+        'Failed to persist fatigue update.',
+        name: 'FatigueDetectionService',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _createSessionSkeleton() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null || _sessionId == null) {
+      developer.log(
+        'Skipping fatigue session start write because user/session is missing.',
+        name: 'FatigueDetectionService',
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('fatigue_sessions')
+          .doc(_sessionId)
+          .set(<String, Object?>{
+            'uid': user.uid,
+            'sessionId': _sessionId,
+            'startedAt': _sessionStartedAt != null
+                ? Timestamp.fromDate(_sessionStartedAt!)
+                : FieldValue.serverTimestamp(),
+            'status': 'active',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updateCount': 0,
+            'highestScore': 0,
+            'highestLevel': FatigueRiskLevel.normal.name,
+          }, SetOptions(merge: true));
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to create fatigue session start document.',
+        name: 'FatigueDetectionService',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _saveSessionSummary() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null || _sessionId == null) {
+      developer.log(
+        'Skipping fatigue session summary write because user/session is missing.',
+        name: 'FatigueDetectionService',
+      );
+      return;
+    }
+
+    try {
+      final FatigueDetectionUpdate? lastUpdate = _lastUpdate;
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('fatigue_sessions')
+          .doc(_sessionId)
+          .set(<String, Object?>{
+            'uid': user.uid,
+            'sessionId': _sessionId,
+            'startedAt': _sessionStartedAt != null
+                ? Timestamp.fromDate(_sessionStartedAt!)
+                : FieldValue.serverTimestamp(),
+            'endedAt': FieldValue.serverTimestamp(),
+            'updateCount': _sessionUpdateCount,
+            'highestScore': _sessionHighestScore,
+            'highestLevel': _sessionHighestLevel.name,
+            'lastScore': lastUpdate?.score,
+            'lastLevel': lastUpdate?.level.name,
+            'lastReason': lastUpdate?.reason,
+            'status': 'completed',
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+    } catch (error, stackTrace) {
+      // Session persistence is best-effort so stopping is never blocked.
+      developer.log(
+        'Failed to persist fatigue session summary.',
+        name: 'FatigueDetectionService',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }
 

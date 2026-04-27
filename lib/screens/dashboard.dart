@@ -25,6 +25,7 @@ class _DashboardState extends State<Dashboard> {
   DateTime? _rideStartedAt;
   int _fatigueAlertCount = 0;
   double _latestFatigueScore = 0;
+  int _statsRefreshVersion = 0;
 
   static const Color _bgColor = Color(0xFF121212);
   static const Color _textSecondary = Color(0xFFA0A0A0);
@@ -74,6 +75,12 @@ class _DashboardState extends State<Dashboard> {
           fatigueScore: _latestFatigueScore,
           tripDate: stoppedAt,
         );
+
+        if (mounted) {
+          setState(() {
+            _statsRefreshVersion++;
+          });
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context)
@@ -269,7 +276,7 @@ class _DashboardState extends State<Dashboard> {
                 },
               ),
               const SizedBox(height: 24),
-              const StatsSection(),
+              StatsSection(key: ValueKey<int>(_statsRefreshVersion)),
               const SizedBox(height: 24),
             ],
           ),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TripRecord {
@@ -31,9 +32,10 @@ class TripRecord {
     };
   }
 
-  Map<String, dynamic> toFirestoreMap() {
+  Map<String, dynamic> toFirestoreMap(String userId) {
     return <String, dynamic>{
       'id': id,
+      'userId': userId,
       'tripDate': Timestamp.fromDate(tripDate),
       'tripDurationSeconds': tripDurationSeconds,
       'fatigueCount': fatigueCount,
@@ -57,7 +59,8 @@ class TripRecord {
   static TripRecord fromLocalMap(Map<String, dynamic> map) {
     return TripRecord(
       id: (map['id'] ?? '').toString(),
-      tripDate: DateTime.tryParse((map['tripDate'] ?? '').toString()) ??
+      tripDate:
+          DateTime.tryParse((map['tripDate'] ?? '').toString()) ??
           DateTime.now(),
       tripDurationSeconds: (map['tripDurationSeconds'] as num?)?.toInt() ?? 0,
       fatigueCount: (map['fatigueCount'] as num?)?.toInt() ?? 0,
@@ -138,8 +141,7 @@ class TripHistoryService {
           records.add(
             TripRecord.fromLocalMap(
               decoded.map(
-                (Object? key, Object? value) =>
-                    MapEntry(key.toString(), value),
+                (Object? key, Object? value) => MapEntry(key.toString(), value),
               ),
             ),
           );
@@ -153,11 +155,18 @@ class TripHistoryService {
   }
 
   Future<bool> _uploadToFirebase(TripRecord record) async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return false;
+    }
+
     try {
       await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
           .collection('trips')
           .doc(record.id)
-          .set(record.toFirestoreMap());
+          .set(record.toFirestoreMap(user.uid));
       return true;
     } catch (_) {
       return false;
