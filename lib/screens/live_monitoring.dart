@@ -1,87 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-
-enum CameraLensDirection { front, back, external }
-
-enum ResolutionPreset { low }
-
-enum ImageFormatGroup { nv21 }
-
-class CameraDescription {
-  const CameraDescription({required this.lensDirection});
-
-  final CameraLensDirection lensDirection;
-}
-
-class CameraImagePlane {
-  CameraImagePlane(this.bytes, {this.bytesPerRow = 0});
-
-  final Uint8List bytes;
-  final int bytesPerRow;
-}
-
-class CameraImage {
-  CameraImage({
-    required this.width,
-    required this.height,
-    required this.planes,
-  });
-
-  final int width;
-  final int height;
-  final List<CameraImagePlane> planes;
-}
-
-class CameraValue {
-  const CameraValue({required this.isInitialized});
-
-  final bool isInitialized;
-}
-
-class CameraController {
-  CameraController(
-    this.description,
-    this.resolutionPreset, {
-    required this.enableAudio,
-    required this.imageFormatGroup,
-  }) : value = const CameraValue(isInitialized: false);
-
-  final CameraDescription description;
-  final ResolutionPreset resolutionPreset;
-  final bool enableAudio;
-  final ImageFormatGroup imageFormatGroup;
-  final CameraValue value;
-
-  Future<void> initialize() async {}
-
-  Future<void> startImageStream(
-    Future<void> Function(CameraImage image) onAvailable,
-  ) async {}
-
-  Future<void> dispose() async {}
-}
-
-Future<List<CameraDescription>> availableCameras() async =>
-    const [CameraDescription(lensDirection: CameraLensDirection.front)];
-
-class CameraPreview extends StatelessWidget {
-  const CameraPreview(this.controller, {super.key});
-
-  final CameraController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: Colors.black,
-      child: Center(
-        child: Icon(Icons.videocam, color: Colors.white54, size: 48),
-      ),
-    );
-  }
-}
 
 class LiveMonitoringScreen extends StatefulWidget {
   const LiveMonitoringScreen({super.key});

@@ -41,48 +41,48 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyD3Hl3zn2iUCFIgDI65ZG_8gNv7D-lODhw',
-    appId: '1:474087755126:web:5c3ebef84fe5c39ecbbe57',
-    messagingSenderId: '474087755126',
-    projectId: 'safe-drive-95876',
-    authDomain: 'safe-drive-95876.firebaseapp.com',
-    storageBucket: 'safe-drive-95876.firebasestorage.app',
-    measurementId: 'G-YFZB1XX07V',
+    apiKey: 'AIzaSyASRroFGvnxr71ZAo6r6tRJohK2F8pplM0',
+    appId: '1:495256617760:web:959d157e029f6fb77c4d45',
+    messagingSenderId: '495256617760',
+    projectId: 'safe-drive-a4b50',
+    authDomain: 'safe-drive-a4b50.firebaseapp.com',
+    storageBucket: 'safe-drive-a4b50.firebasestorage.app',
+    measurementId: 'G-R2T4H8J25K',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCKSe_-Ihv22CNpOPDSdqaqCFGpr1cLVHk',
-    appId: '1:474087755126:android:65d92d63f34b7ed2cbbe57',
-    messagingSenderId: '474087755126',
-    projectId: 'safe-drive-95876',
-    storageBucket: 'safe-drive-95876.firebasestorage.app',
+    apiKey: 'AIzaSyD1kVmhRI2X7bym_Y78FKnXFlUnBh7QjHc',
+    appId: '1:495256617760:android:dac4342e1e3fa39f7c4d45',
+    messagingSenderId: '495256617760',
+    projectId: 'safe-drive-a4b50',
+    storageBucket: 'safe-drive-a4b50.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyA-C6VUWct5dgIrcpFQY-tPAztjcX1Y8js',
-    appId: '1:474087755126:ios:50d4498f0272be13cbbe57',
-    messagingSenderId: '474087755126',
-    projectId: 'safe-drive-95876',
-    storageBucket: 'safe-drive-95876.firebasestorage.app',
+    apiKey: 'AIzaSyCFm2imyYJpHVXvioBLRnhw34WwK9ZSYcg',
+    appId: '1:495256617760:ios:bb791b8af19ad85b7c4d45',
+    messagingSenderId: '495256617760',
+    projectId: 'safe-drive-a4b50',
+    storageBucket: 'safe-drive-a4b50.firebasestorage.app',
     iosBundleId: 'com.example.safeDrive',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyA-C6VUWct5dgIrcpFQY-tPAztjcX1Y8js',
-    appId: '1:474087755126:ios:50d4498f0272be13cbbe57',
-    messagingSenderId: '474087755126',
-    projectId: 'safe-drive-95876',
-    storageBucket: 'safe-drive-95876.firebasestorage.app',
+    apiKey: 'AIzaSyCFm2imyYJpHVXvioBLRnhw34WwK9ZSYcg',
+    appId: '1:495256617760:ios:bb791b8af19ad85b7c4d45',
+    messagingSenderId: '495256617760',
+    projectId: 'safe-drive-a4b50',
+    storageBucket: 'safe-drive-a4b50.firebasestorage.app',
     iosBundleId: 'com.example.safeDrive',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyD3Hl3zn2iUCFIgDI65ZG_8gNv7D-lODhw',
-    appId: '1:474087755126:web:186ae5239cfed2b4cbbe57',
-    messagingSenderId: '474087755126',
-    projectId: 'safe-drive-95876',
-    authDomain: 'safe-drive-95876.firebaseapp.com',
-    storageBucket: 'safe-drive-95876.firebasestorage.app',
-    measurementId: 'G-X950S2MJKV',
+    apiKey: 'AIzaSyASRroFGvnxr71ZAo6r6tRJohK2F8pplM0',
+    appId: '1:495256617760:web:b00a6b6409808b6c7c4d45',
+    messagingSenderId: '495256617760',
+    projectId: 'safe-drive-a4b50',
+    authDomain: 'safe-drive-a4b50.firebaseapp.com',
+    storageBucket: 'safe-drive-a4b50.firebasestorage.app',
+    measurementId: 'G-LS14P3PF6X',
   );
 }
