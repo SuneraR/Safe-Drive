@@ -1,7 +1,13 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:vibration/vibration.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
@@ -38,11 +44,32 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
   bool alertShown = false;
 
   Timer? timer;
+  String? _sessionId;
+  DateTime? _sessionStartedAt;
+  String _lastPersistedStatus = 'Normal';
+  bool _sessionSaved = false;
+  
+  // Yawning detection
+  int _yawnCount = 0;
+  bool _eyesWereClosed = false;
+  DateTime? _eyesClosedTime;
+  bool _yawnAlertShown = false;
+  late AudioPlayer _alertPlayer;
+  
+  // UI Colors (matching dashboard)
+  static const Color _bgColor = Color(0xFF121212);
+  static const Color _cardColor = Color(0xFF1C1C1E);
+  static const Color _textSecondary = Color(0xFFA0A0A0);
+  static const Color _accentGreen = Color(0xFF65F58B);
+  static const Color _accentOrange = Color(0xFFFFD60A);
+  static const Color _accentRed = Color(0xFFFF453A);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    _alertPlayer = AudioPlayer();
 
     initCamera();
 
@@ -56,6 +83,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       checkEyeClosure();
     });
+
+    _sessionId = DateTime.now().microsecondsSinceEpoch.toString();
+    _sessionStartedAt = DateTime.now();
+    unawaited(_createLiveMonitoringSession());
   }
 
   Future<void> initCamera() async {
@@ -138,12 +169,19 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
 
   /// 🔥 FATIGUE + ALERT LOGIC (FIXED)
   void checkEyeClosure() {
+    final DateTime now = DateTime.now();
+
     if (eyesClosed) {
       if (eyesClosedStart == null) {
         eyesClosedStart = DateTime.now();
       }
 
       final duration = DateTime.now().difference(eyesClosedStart!);
+
+      if (!_eyesWereClosed) {
+        _eyesWereClosed = true;
+        _eyesClosedTime = now;
+      }
 
       setState(() {
         if (duration.inSeconds >= 5) {
@@ -153,15 +191,20 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
         }
       });
 
+      if (fatigueStatus != _lastPersistedStatus) {
+        _lastPersistedStatus = fatigueStatus;
+        unawaited(_persistLiveMonitoringUpdate(fatigueStatus));
+      }
+
       if (duration.inSeconds >= 5 && !alertShown) {
         alertShown = true;
 
         print("ALERT TRIGGERED");
 
         // ✅ FIXED SAFE UI CALL
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (!mounted) return;
-          showAlert();
+          await showAlert();
           speakAlert();
         });
       }
@@ -171,9 +214,75 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
         fatigueStatus = "Normal 😊";
       });
 
+      if (_eyesWereClosed && _eyesClosedTime != null) {
+        final eyeClosureDuration = now.difference(_eyesClosedTime!);
+        if (eyeClosureDuration.inMilliseconds >= 300 && eyeClosureDuration.inMilliseconds <= 1500) {
+          _yawnCount++;
+          print("YAWN DETECTED: $_yawnCount");
+          
+          if (_yawnCount >= 5 && !_yawnAlertShown) {
+            _yawnAlertShown = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _showYawnWarning();
+            });
+          }
+          
+          unawaited(_persistLiveMonitoringUpdate('yawned'));
+        }
+        _eyesWereClosed = false;
+        _eyesClosedTime = null;
+      }
+
+      if (fatigueStatus != _lastPersistedStatus) {
+        _lastPersistedStatus = fatigueStatus;
+        unawaited(_persistLiveMonitoringUpdate(fatigueStatus));
+      }
+
       eyesClosedStart = null;
       alertShown = false;
     }
+  }
+
+  Future<void> _showYawnWarning() async {
+    if (!mounted) return;
+
+    if (await Vibration.hasVibrator()) {
+      await Vibration.vibrate(duration: 500, amplitude: 200);
+    } else {
+      await HapticFeedback.mediumImpact();
+    }
+
+    await _alertPlayer.stop();
+    await _alertPlayer.setReleaseMode(ReleaseMode.loop);
+    await _alertPlayer.play(AssetSource('sounds/warning.mp3'));
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: const Text(
+          'Excessive Yawning Detected',
+          style: TextStyle(color: _accentRed),
+        ),
+        content: const Text(
+          'You have yawned more than 5 times. Please take a break or find a safe place to rest.',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await _alertPlayer.stop();
+              await _alertPlayer.setReleaseMode(ReleaseMode.release);
+              Navigator.of(context).pop();
+              _yawnAlertShown = false;
+            },
+            child: const Text('OK', style: TextStyle(color: _accentGreen)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 🔊 VOICE ALERT
@@ -185,8 +294,13 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
   }
 
   /// 🚨 ALERT UI (SAFE)
-  void showAlert() {
+  Future<void> showAlert() async {
     if (!mounted) return;
+
+    // Play warning sound on loop
+    await _alertPlayer.stop();
+    await _alertPlayer.setReleaseMode(ReleaseMode.loop);
+    await _alertPlayer.play(AssetSource('sounds/warning.mp3'));
 
     showDialog(
       context: context,
@@ -201,7 +315,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () {
+            onPressed: () async {
+              await _alertPlayer.stop();
+              await _alertPlayer.setReleaseMode(ReleaseMode.release);
               Navigator.of(context).pop();
               alertShown = false;
             },
@@ -215,6 +331,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
 
   @override
   void dispose() {
+    if (!_sessionSaved) {
+      unawaited(_saveLiveMonitoringSessionSummary());
+    }
+    _alertPlayer.dispose();
     timer?.cancel();
     _controller?.dispose();
     _faceDetector.close();
@@ -222,24 +342,149 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
     super.dispose();
   }
 
+  Future<void> _createLiveMonitoringSession() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null || _sessionId == null) {
+      developer.log(
+        'Live monitoring session not created: user/session missing.',
+        name: 'LiveMonitoringScreen',
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('fatigue_sessions')
+          .doc(_sessionId)
+          .set(<String, Object?>{
+            'uid': user.uid,
+            'sessionId': _sessionId,
+            'source': 'camera_live_monitoring',
+            'startedAt': _sessionStartedAt != null
+                ? Timestamp.fromDate(_sessionStartedAt!)
+                : FieldValue.serverTimestamp(),
+            'status': 'active',
+            'lastStatus': fatigueStatus,
+            'updateCount': 0,
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to create live monitoring fatigue session.',
+        name: 'LiveMonitoringScreen',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _persistLiveMonitoringUpdate(String status) async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null || _sessionId == null) {
+      return;
+    }
+
+    try {
+      final String updateId = DateTime.now().microsecondsSinceEpoch.toString();
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('fatigue_sessions')
+          .doc(_sessionId)
+          .collection('updates')
+          .doc(updateId)
+          .set(<String, Object?>{
+            'uid': user.uid,
+            'sessionId': _sessionId,
+            'source': 'camera_live_monitoring',
+            'status': status,
+            'timestamp': Timestamp.fromDate(DateTime.now()),
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('fatigue_sessions')
+          .doc(_sessionId)
+          .set(<String, Object?>{
+            'lastStatus': status,
+            'updateCount': FieldValue.increment(1),
+          }, SetOptions(merge: true));
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to persist live monitoring fatigue update.',
+        name: 'LiveMonitoringScreen',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _saveLiveMonitoringSessionSummary() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null || _sessionId == null) {
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('fatigue_sessions')
+          .doc(_sessionId)
+          .set(<String, Object?>{
+            'uid': user.uid,
+            'sessionId': _sessionId,
+            'source': 'camera_live_monitoring',
+            'status': 'completed',
+            'lastStatus': fatigueStatus,
+            'endedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+      _sessionSaved = true;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to save live monitoring fatigue session summary.',
+        name: 'LiveMonitoringScreen',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0F1A),
+      backgroundColor: _bgColor,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             children: [
 
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Live Monitoring",
-                      style: TextStyle(color: Colors.white)),
+                  const Text(
+                    'Live Monitoring',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () async {
+                      await _saveLiveMonitoringSessionSummary();
+                      if (!mounted) {
+                        return;
+                      }
+                      Navigator.pop(context);
+                    },
                   )
                 ],
               ),
@@ -248,7 +493,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
 
               _statusSection(),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 20),
+              
+              _yawnCounterCard(),
+
+              const SizedBox(height: 20),
 
               Container(
                 width: 190,
@@ -263,17 +512,23 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
                     : CameraPreview(_controller!),
               ),
 
-              const Spacer(),
+              const SizedBox(height: 20),
 
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
+                        backgroundColor: _accentRed,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () async {
+                        await _saveLiveMonitoringSessionSummary();
+                        if (!mounted) {
+                          return;
+                        }
+                        Navigator.pop(context);
+                      },
                       child: const Text("Stop Monitoring"),
                     ),
                   ),
@@ -286,12 +541,70 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
     );
   }
 
+  Widget _yawnCounterCard() {
+    final Color yawnColor = _yawnCount >= 5 ? _accentRed : _accentOrange;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: yawnColor.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Yawn Count',
+                style: TextStyle(
+                  color: _textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$_yawnCount',
+                style: TextStyle(
+                  color: yawnColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: yawnColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _yawnCount >= 5 ? '⚠️ High' : _yawnCount > 0 ? '⚡ Active' : '✓ None',
+              style: TextStyle(
+                color: yawnColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _statusSection() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1C2E),
+        color: _cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blueAccent),
+        border: Border.all(color: _accentGreen.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -302,8 +615,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Eye Status",
-                      style: TextStyle(color: Colors.grey)),
+                  const Text(
+                    'Eye Status',
+                    style: TextStyle(color: _textSecondary, fontSize: 12),
+                  ),
                   const SizedBox(height: 5),
                   Text(
                     eyesClosed ? "Closed 🔴" : "Open 🟢",
@@ -325,8 +640,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Fatigue Status",
-                      style: TextStyle(color: Colors.grey)),
+                  const Text(
+                    'Fatigue Status',
+                    style: TextStyle(color: _textSecondary, fontSize: 12),
+                  ),
                   const SizedBox(height: 5),
                   Text(
                     fatigueStatus,
