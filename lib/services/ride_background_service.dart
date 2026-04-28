@@ -1,15 +1,10 @@
 import 'dart:async';
-import 'dart:ui';
-
-import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
 class RideBackgroundService {
   RideBackgroundService._();
 
   static final RideBackgroundService instance = RideBackgroundService._();
-
-  static const String _notificationChannelId = 'safe_drive_monitoring';
 
   final FlutterBackgroundService _service = FlutterBackgroundService();
 
@@ -25,7 +20,6 @@ class RideBackgroundService {
         onStart: onRideBackgroundServiceStart,
         autoStart: false,
         isForegroundMode: true,
-        notificationChannelId: _notificationChannelId,
         initialNotificationTitle: 'Safe Drive',
         initialNotificationContent: 'Background ride monitoring is ready.',
         foregroundServiceNotificationId: 101,
@@ -63,8 +57,6 @@ class RideBackgroundService {
 
 @pragma('vm:entry-point')
 Future<void> onRideBackgroundServiceStart(ServiceInstance service) async {
-  DartPluginRegistrant.ensureInitialized();
-
   if (service is AndroidServiceInstance) {
     service.setForegroundNotificationInfo(
       title: 'Safe Drive',
@@ -88,12 +80,9 @@ Future<void> onRideBackgroundServiceStart(ServiceInstance service) async {
 
 @pragma('vm:entry-point')
 Future<bool> onRideBackgroundServiceBackground(ServiceInstance service) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  DartPluginRegistrant.ensureInitialized();
   return true;
 }
 
 @pragma('vm:entry-point')
 void onRideBackgroundServiceForeground(ServiceInstance service) {
-  DartPluginRegistrant.ensureInitialized();
 }
