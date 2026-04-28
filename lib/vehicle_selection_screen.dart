@@ -89,8 +89,7 @@ class _VehicleSelectionScreenState extends State<VehicleSelectionScreen> {
 
   // The small function that creates the card (this helps to stop you from writing code over and over again)
   Widget _buildVehicleCard(String title, String description, IconData icon) {
-    bool isSelected = selectedVehicle == title; // මේක තෝරලද කියලා බලනවා
-
+    bool isSelected = selectedVehicle == title; 
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -145,7 +144,7 @@ class _VehicleSelectionScreenState extends State<VehicleSelectionScreen> {
                     style: TextStyle(
                       color: Colors.grey[500],
                       fontSize: 13,
-                      height: 1.4, // පේළි අතර පරතරය
+                      height: 1.4, 
                     ),
                   ),
                 ],
