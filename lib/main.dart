@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:safe_drive/firebase_options.dart';
+import 'services/app_notification_service.dart';
+import 'services/ride_background_service.dart';
 import 'screens/history.dart';
 import 'screens/settings.dart';
 import 'screens/dashboard.dart';
@@ -12,6 +14,8 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    await AppNotificationService.instance.initialize();
+    await RideBackgroundService.instance.initialize();
   } catch (_) {
     // App still runs if Firebase isn't configured in this build flavor.
   }
@@ -76,7 +80,7 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFF111318),
             borderRadius: BorderRadius.circular(38),
-            border: Border.all(color: Colors.black.withOpacity(0.35)),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.35)),
           ),
           child: Row(
             children: [

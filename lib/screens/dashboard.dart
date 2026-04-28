@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
 import '../controllers/fatigue_monitoring_controller.dart';
+import '../services/app_notification_service.dart';
 import '../services/fatigue_detection_service.dart';
+import '../services/ride_background_service.dart';
 import '../services/trip_history_service.dart';
 import '../widgets/dashboard/driver_status_card.dart';
 import '../widgets/dashboard/start_ride_button.dart';
@@ -17,10 +21,12 @@ class Dashboard extends StatefulWidget {
   State<Dashboard> createState() => _DashboardState();
 }
 
-class _DashboardState extends State<Dashboard> {
+class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
   late final FatigueMonitoringController _fatigueController;
   late final AudioPlayer _warningPlayer;
   late final TripHistoryService _tripHistoryService;
+
+  bool _isAppForeground = true;
 
   DateTime? _rideStartedAt;
   int _fatigueAlertCount = 0;
@@ -33,6 +39,7 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     _warningPlayer = AudioPlayer();
     _tripHistoryService = TripHistoryService();
@@ -47,10 +54,16 @@ class _DashboardState extends State<Dashboard> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _fatigueController.state.removeListener(_onFatigueStateChanged);
     _warningPlayer.dispose();
     _fatigueController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isAppForeground = state == AppLifecycleState.resumed;
   }
 
   void _onFatigueStateChanged() {
@@ -66,6 +79,7 @@ class _DashboardState extends State<Dashboard> {
     if (active) {
       final DateTime stoppedAt = DateTime.now();
       await _fatigueController.stopRide();
+      await RideBackgroundService.instance.stop();
 
       final DateTime? startedAt = _rideStartedAt;
       if (startedAt != null && stoppedAt.isAfter(startedAt)) {
@@ -97,6 +111,7 @@ class _DashboardState extends State<Dashboard> {
       return;
     }
 
+    await RideBackgroundService.instance.start();
     await _fatigueController.startRide();
     _rideStartedAt = DateTime.now();
     _fatigueAlertCount = 0;
@@ -104,27 +119,37 @@ class _DashboardState extends State<Dashboard> {
   }
 
   Future<void> _handleFatigueWarning(FatigueDetectionUpdate update) async {
-    if (!mounted) {
-      return;
-    }
-
     _fatigueAlertCount++;
-
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-
-    if (await Vibration.hasVibrator()) {
-      await Vibration.vibrate(duration: 600, amplitude: 255);
-    } else {
-      await HapticFeedback.heavyImpact();
-    }
-
-    await _warningPlayer.stop();
-    await _warningPlayer.play(AssetSource('sounds/warning.mp3'));
 
     final bool critical = update.level == FatigueRiskLevel.critical;
     final String prefix = critical
         ? 'Critical fatigue risk'
         : 'Fatigue warning';
+
+    unawaited(
+      AppNotificationService.instance.showFatigueWarning(
+        title: prefix,
+        body: update.reason,
+        critical: critical,
+      ),
+    );
+
+    if (_isAppForeground) {
+      if (await Vibration.hasVibrator()) {
+        await Vibration.vibrate(duration: 600, amplitude: 255);
+      } else {
+        await HapticFeedback.heavyImpact();
+      }
+
+      await _warningPlayer.stop();
+      await _warningPlayer.play(AssetSource('sounds/warning.mp3'));
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
     messenger
       ..hideCurrentSnackBar()
