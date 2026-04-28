@@ -109,7 +109,7 @@ class _LoginState extends State<Login> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -119,7 +119,7 @@ class _LoginState extends State<Login> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   /// Logo
-                  const Center(
+                  Center(
                     child: Column(
                       children: [
                         Icon(
@@ -131,7 +131,7 @@ class _LoginState extends State<Login> {
                         Text(
                           "SafeDrive",
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Theme.of(context).textTheme.bodyLarge!.color,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                           ),
@@ -147,7 +147,7 @@ class _LoginState extends State<Login> {
                   const SizedBox(height: 40),
 
                   /// Email
-                  const Text("Email", style: TextStyle(color: Colors.white)),
+                  Text("Email", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color)),
                   const SizedBox(height: 8),
                   AuthTextField(
                     controller: emailController,
@@ -158,7 +158,7 @@ class _LoginState extends State<Login> {
                   const SizedBox(height: 20),
 
                   /// Password
-                  const Text("Password", style: TextStyle(color: Colors.white)),
+                  Text("Password", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color)),
                   const SizedBox(height: 8),
                   AuthTextField(
                     controller: passwordController,
@@ -170,11 +170,11 @@ class _LoginState extends State<Login> {
                   const SizedBox(height: 10),
 
                   /// Forgot Password
-                  const Align(
+                  Align(
                     alignment: Alignment.centerRight,
                     child: Text(
                       "Forgot Password?",
-                      style: TextStyle(color: Colors.green),
+                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
                     ),
                   ),
 
