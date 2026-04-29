@@ -34,9 +34,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Settings', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color)),
+              Text(
+                'Settings',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: theme.textTheme.bodyLarge?.color,
+                ),
+              ),
               const SizedBox(height: 32),
 
+              // --- ALERT SETTINGS ---
               SettingsSectionHeader(icon: Icons.notifications_none, title: 'Alert Settings', accentColor: accentGreen),
               SettingsCard(
                 child: Column(
@@ -62,17 +70,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               const SizedBox(height: 24),
-              SettingsSectionHeader(icon: Icons.shield_outlined, title: 'Sensitivity', accentColor: accentGreen),
+
+              // --- VEHICLE CONFIGURATION ---
+              SettingsSectionHeader(
+                icon: Icons.directions_car_outlined,
+                title: 'Vehicle Configuration',
+                accentColor: accentGreen,
+              ),
               SettingsCard(
-                child: SensitivitySelector(
-                  options: const ['Low', 'Medium', 'High'],
-                  selectedValue: _sensitivity,
-                  accentColor: accentGreen,
-                  onChanged: (val) => setState(() => _sensitivity = val),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Current Vehicle:',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                          ),
+                        ),
+                        // THIS DISPLAYS THE SELECTED VEHICLE
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: accentGreen.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            themeProvider.selectedVehicle,
+                            style: TextStyle(
+                              color: accentGreen,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SettingsActionButton(
+                      text: 'Change Vehicle Type',
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/vehicle_select');
+                      },
+                    ),
+                  ],
                 ),
               ),
 
               const SizedBox(height: 24),
+
+              // --- APPEARANCE ---
               SettingsSectionHeader(icon: Icons.dark_mode_outlined, title: 'Appearance', accentColor: accentGreen),
               SettingsCard(
                 child: SettingsSwitchTile(
@@ -86,6 +136,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               const SizedBox(height: 24),
+
+              // --- ABOUT ---
               SettingsSectionHeader(icon: Icons.info_outline, title: 'About', accentColor: Colors.grey),
               const SettingsCard(
                 child: Column(
@@ -97,6 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               const SizedBox(height: 32),
+
               const SettingsActionButton(text: 'Privacy Policy'),
               const SizedBox(height: 12),
               SettingsActionButton(
@@ -104,6 +157,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 textColor: Colors.redAccent,
                 onPressed: () => FirebaseAuth.instance.signOut(),
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
