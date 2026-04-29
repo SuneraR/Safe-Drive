@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:safe_drive/firebase_options.dart';
 import 'services/app_notification_service.dart';
 import 'services/ride_background_service.dart';
@@ -9,6 +10,7 @@ import 'screens/loading.dart';
 import 'screens/settings.dart';
 import 'screens/dashboard.dart';
 import 'screens/login.dart';
+import 'screens/theme_provider.dart';
 
 Future<void> _bootstrapApp() async {
   try {
@@ -34,30 +36,68 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Safe Drive',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFF121212),
-      ),
+    return ChangeNotifierProvider(
+      create: (_) => ThemeNotifier(),
+      child: Consumer<ThemeNotifier>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp(
+            title: 'Safe Drive',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              useMaterial3: true,
+              brightness: Brightness.light,
+              scaffoldBackgroundColor: Colors.white,
+              primaryColor: Colors.green,
+              cardColor: const Color(0xFFF5F5F5),
+              colorScheme: const ColorScheme.light(
+                primary: Colors.green,
+                secondary: Colors.greenAccent,
+                onPrimary: Colors.white,
+              ),
+              textTheme: const TextTheme(
+                bodyLarge: TextStyle(color: Colors.black),
+                bodyMedium: TextStyle(color: Colors.black87),
+              ),
+            ),
+            darkTheme: ThemeData(
+              useMaterial3: true,
+              brightness: Brightness.dark,
+              scaffoldBackgroundColor: const Color(0xFF121212),
+              primaryColor: const Color(0xFF65F58B),
+              cardColor: const Color(0xFF1C1C1E),
+              colorScheme: const ColorScheme.dark(
+                primary: Color(0xFF65F58B),
+                secondary: Colors.greenAccent,
+                onPrimary: Colors.black,
+              ),
+              textTheme: const TextTheme(
+                bodyLarge: TextStyle(color: Colors.white),
+                bodyMedium: TextStyle(color: Colors.white70),
+              ),
+            ),
+            themeMode: themeProvider.isDark ? ThemeMode.dark : ThemeMode.light,
 
-      // ✅ Routes for navigation
-      routes: {
-        '/login': (context) => const Login(),
-        '/home': (context) => const RootNavigationScreen(),
-      },
+            // ✅ Routes for navigation
+            routes: {
+              '/login': (context) => const Login(),
+              '/home': (context) => const RootNavigationScreen(),
+            },
 
-      // 👉 Start with the loading screen while Firebase/services boot.
-      home: FutureBuilder<void>(
-        future: _bootstrapFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const SafeDriveLoading();
-          }
+            // 👉 Start with the loading screen while Firebase/services boot.
+            home: FutureBuilder<void>(
+              future: _bootstrapFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const SafeDriveLoading();
+                }
 
-          final user = FirebaseAuth.instance.currentUser;
-          return user == null ? const Login() : const RootNavigationScreen();
+                final user = FirebaseAuth.instance.currentUser;
+                return user == null
+                    ? const Login()
+                    : const RootNavigationScreen();
+              },
+            ),
+          );
         },
       ),
     );

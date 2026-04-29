@@ -57,7 +57,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _formatTripDate(DateTime tripDate) {
     final DateTime now = DateTime.now();
     final DateTime today = DateTime(now.year, now.month, now.day);
-    final DateTime tripDay = DateTime(tripDate.year, tripDate.month, tripDate.day);
+    final DateTime tripDay = DateTime(
+      tripDate.year,
+      tripDate.month,
+      tripDate.day,
+    );
     final Duration dayDiff = today.difference(tripDay);
 
     final String hour = tripDate.hour.toString().padLeft(2, '0');
@@ -138,8 +142,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
           alerts: trip.fatigueCount.toString(),
           status: _statusLabel(trip.fatigueScore),
           statusColor: _statusColor(trip.fatigueScore),
-          surfaceColor: cardBgColor,
-          textColor: textGrey,
         );
       }).toList(),
     );
@@ -159,12 +161,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final double avgFatigue = totalTrips == 0
         ? 0
         : _recentTrips
-                .map((TripRecord trip) => trip.fatigueScore)
-                .reduce((double a, double b) => a + b) /
-            totalTrips;
+                  .map((TripRecord trip) => trip.fatigueScore)
+                  .reduce((double a, double b) => a + b) /
+              totalTrips;
 
     return SectionCard(
-      surfaceColor: cardBgColor,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,7 +182,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: StatValueTile(
                   label: 'Total Trips',
                   value: totalTrips.toString(),
-                  labelColor: textGrey,
                   valueColor: Colors.white,
                 ),
               ),
@@ -189,7 +189,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: StatValueTile(
                   label: 'Total Alerts',
                   value: totalAlerts.toString(),
-                  labelColor: textGrey,
                   valueColor: accentYellow,
                 ),
               ),
@@ -202,7 +201,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: StatValueTile(
                   label: 'Driving Time',
                   value: '${totalHours}h',
-                  labelColor: textGrey,
                   valueColor: Colors.white,
                 ),
               ),
@@ -210,7 +208,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: StatValueTile(
                   label: 'Avg Fatigue',
                   value: '${(avgFatigue * 100).toStringAsFixed(0)}%',
-                  labelColor: textGrey,
                   valueColor: accentGreen,
                 ),
               ),
@@ -280,12 +277,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   List<FlSpot> _todayFatigueSpots() {
     final DateTime now = DateTime.now();
-    final List<TripRecord> todayTrips = _recentTrips.where((TripRecord trip) {
-      return trip.tripDate.year == now.year &&
-          trip.tripDate.month == now.month &&
-          trip.tripDate.day == now.day;
-    }).toList()
-      ..sort((TripRecord a, TripRecord b) => a.tripDate.compareTo(b.tripDate));
+    final List<TripRecord> todayTrips =
+        _recentTrips.where((TripRecord trip) {
+          return trip.tripDate.year == now.year &&
+              trip.tripDate.month == now.month &&
+              trip.tripDate.day == now.day;
+        }).toList()..sort(
+          (TripRecord a, TripRecord b) => a.tripDate.compareTo(b.tripDate),
+        );
 
     final List<FlSpot> spots = todayTrips.map((TripRecord trip) {
       final double x = trip.tripDate.hour + (trip.tripDate.minute / 60.0);

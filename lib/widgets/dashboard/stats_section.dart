@@ -17,7 +17,6 @@ class _StatsSectionState extends State<StatsSection> {
   int _lastTripDurationSeconds = 0;
   bool _isLoading = true;
 
-  static const Color _textSecondary = Color(0xFFA0A0A0);
   static const Color _accentGreen = Color(0xFF65F58B);
 
   @override
