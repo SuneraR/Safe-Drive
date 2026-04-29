@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-
+import 'screens/vehicle_selection.dart';
 import 'screens/history.dart';
 import 'screens/settings.dart';
 import 'screens/dashboard.dart';
@@ -29,6 +29,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const Login(),
         '/home': (context) => const RootNavigationScreen(),
+        '/vehicle_select': (context) => const VehicleSelectionScreen(),
       },
 
       // 👉 Start from Login
