@@ -14,6 +14,8 @@ class SettingsSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
@@ -22,14 +24,14 @@ class SettingsSectionHeader extends StatelessWidget {
           const SizedBox(width: 10),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: theme.textTheme.titleLarge?.color,
             ),
           ),
         ],
       ),
     );
   }
-}
+} 

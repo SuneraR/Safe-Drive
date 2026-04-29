@@ -9,7 +9,7 @@ class SettingsSwitchTile extends StatelessWidget {
     required this.value,
     required this.onChanged,
     required this.accentColor,
-    required this.subtitleColor,
+    this.subtitleColor, // Made this optional
   });
 
   final IconData icon;
@@ -18,10 +18,14 @@ class SettingsSwitchTile extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   final Color accentColor;
-  final Color subtitleColor;
+  final Color? subtitleColor;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textPrimary = theme.textTheme.bodyLarge?.color ?? Colors.white;
+    final textSecondary = subtitleColor ?? theme.textTheme.bodyMedium?.color?.withOpacity(0.6);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
@@ -34,19 +38,12 @@ class SettingsSwitchTile extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: textPrimary),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: subtitleColor,
-                  ),
+                  style: TextStyle(fontSize: 13, color: textSecondary),
                 ),
               ],
             ),
@@ -54,10 +51,8 @@ class SettingsSwitchTile extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: Colors.white,
+            activeThumbColor: Colors.white,
             activeTrackColor: accentColor,
-            inactiveThumbColor: Colors.white,
-            inactiveTrackColor: Colors.grey.shade800,
           ),
         ],
       ),

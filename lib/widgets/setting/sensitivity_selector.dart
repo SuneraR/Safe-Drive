@@ -16,30 +16,48 @@ class SensitivitySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final Color unselectedBg =
+        theme.brightness == Brightness.dark
+            ? const Color(0xFF2C2C2E)
+            : theme.cardColor;
+
+    final Color unselectedText =
+        theme.textTheme.bodyMedium?.color ?? Colors.black;
+
+    final Color selectedText =
+        theme.colorScheme.onPrimary;
+
     return Row(
       children: [
         for (int i = 0; i < options.length; i++) ...[
           if (i != 0) const SizedBox(width: 8),
+
           Expanded(
             child: GestureDetector(
               onTap: () => onChanged(options[i]),
+
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
+
                 decoration: BoxDecoration(
                   color: selectedValue == options[i]
                       ? accentColor
-                      : const Color(0xFF2C2C2E),
+                      : unselectedBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
+
                 alignment: Alignment.center,
+
                 child: Text(
                   options[i],
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: selectedValue == options[i]
-                        ? Colors.black
-                        : Colors.white,
+                        ? selectedText
+                        : unselectedText,
                   ),
                 ),
               ),

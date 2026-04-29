@@ -4,14 +4,14 @@ class AuthTextField extends StatefulWidget {
   final String hint;
   final IconData icon;
   final bool isPassword;
-  final TextEditingController? controller; // ✅ ADD THIS
+  final TextEditingController? controller;
 
   const AuthTextField({
     super.key,
     required this.hint,
     required this.icon,
     this.isPassword = false,
-    this.controller, // ✅ ADD THIS
+    this.controller,
   });
 
   @override
@@ -23,22 +23,39 @@ class _AuthTextFieldState extends State<AuthTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return TextField(
-      controller: widget.controller, // ✅ ADD THIS
+      controller: widget.controller,
       obscureText: widget.isPassword ? _obscureText : false,
-      style: const TextStyle(color: Colors.white),
+
+      /// ✅ TEXT COLOR (auto changes)
+      style: TextStyle(
+        color: theme.textTheme.bodyLarge!.color,
+      ),
+
       decoration: InputDecoration(
         hintText: widget.hint,
-        hintStyle: const TextStyle(color: Colors.grey),
-        prefixIcon: Icon(widget.icon, color: Colors.grey),
 
+        /// ✅ HINT COLOR
+        hintStyle: TextStyle(
+          color: theme.textTheme.bodyMedium!.color!.withOpacity(0.6),
+        ),
+
+        /// ✅ ICON COLOR
+        prefixIcon: Icon(
+          widget.icon,
+          color: theme.textTheme.bodyMedium!.color,
+        ),
+
+        /// 👁 PASSWORD TOGGLE
         suffixIcon: widget.isPassword
             ? IconButton(
                 icon: Icon(
                   _obscureText
                       ? Icons.visibility_off
                       : Icons.visibility,
-                  color: Colors.grey,
+                  color: theme.textTheme.bodyMedium!.color,
                 ),
                 onPressed: () {
                   setState(() {
@@ -48,8 +65,11 @@ class _AuthTextFieldState extends State<AuthTextField> {
               )
             : null,
 
+        /// ✅ BACKGROUND
         filled: true,
-        fillColor: Colors.white10,
+        fillColor: theme.cardColor,
+
+        /// ✅ BORDER
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
