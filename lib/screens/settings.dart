@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
 import 'app_settings_provider.dart';
-import 'theme_provider.dart';
+import 'package:safe_drive/Providers/theme_provider.dart';
 import '../widgets/setting/sensitivity_selector.dart';
 import '../widgets/setting/settings_action_button.dart';
 import '../widgets/setting/settings_card.dart';

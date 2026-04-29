@@ -11,7 +11,7 @@ import 'screens/loading.dart';
 import 'screens/settings.dart';
 import 'screens/dashboard.dart';
 import 'screens/login.dart';
-import 'screens/theme_provider.dart';
+import 'package:safe_drive/Providers/theme_provider.dart';
 
 Future<void> _bootstrapApp() async {
   try {

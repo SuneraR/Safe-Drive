@@ -20,7 +20,6 @@ class LiveMonitoringScreen extends StatefulWidget {
 
 class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
     with WidgetsBindingObserver {
-
   CameraController? _controller;
   List<CameraDescription>? cameras;
 
@@ -29,6 +28,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
 
   bool isProcessing = false;
   DateTime? lastProcessed;
+  bool _showCameraPreview = true;
 
   int frameSkip = 0;
 
@@ -48,21 +48,19 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
   DateTime? _sessionStartedAt;
   String _lastPersistedStatus = 'Normal';
   bool _sessionSaved = false;
-  
+
   // Yawning detection
   int _yawnCount = 0;
   bool _eyesWereClosed = false;
   DateTime? _eyesClosedTime;
   bool _yawnAlertShown = false;
   late AudioPlayer _alertPlayer;
-  
-  // UI Colors (matching dashboard)
-  static const Color _bgColor = Color(0xFF121212);
-  static const Color _cardColor = Color(0xFF1C1C1E);
-  static const Color _textSecondary = Color(0xFFA0A0A0);
-  static const Color _accentGreen = Color(0xFF65F58B);
-  static const Color _accentOrange = Color(0xFFFFD60A);
-  static const Color _accentRed = Color(0xFFFF453A);
+
+  void _toggleCameraPreview() {
+    setState(() {
+      _showCameraPreview = !_showCameraPreview;
+    });
+  }
 
   @override
   void initState() {
@@ -184,7 +182,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
       }
 
       setState(() {
-        if (duration.inSeconds >= 5) {
+        if (duration.inSeconds > 5) {
           fatigueStatus = "Sleepy 😴";
         } else {
           fatigueStatus = "Drowsy 😐";
@@ -196,7 +194,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
         unawaited(_persistLiveMonitoringUpdate(fatigueStatus));
       }
 
-      if (duration.inSeconds >= 5 && !alertShown) {
+      if (duration.inSeconds > 5 && !alertShown) {
         alertShown = true;
 
         print("ALERT TRIGGERED");
@@ -208,7 +206,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
           speakAlert();
         });
       }
-
     } else {
       setState(() {
         fatigueStatus = "Normal 😊";
@@ -216,10 +213,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
 
       if (_eyesWereClosed && _eyesClosedTime != null) {
         final eyeClosureDuration = now.difference(_eyesClosedTime!);
-        if (eyeClosureDuration.inMilliseconds >= 300 && eyeClosureDuration.inMilliseconds <= 1500) {
+        if (eyeClosureDuration.inMilliseconds >= 300 &&
+            eyeClosureDuration.inMilliseconds <= 1500) {
           _yawnCount++;
           print("YAWN DETECTED: $_yawnCount");
-          
+
           if (_yawnCount >= 5 && !_yawnAlertShown) {
             _yawnAlertShown = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -227,7 +225,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               _showYawnWarning();
             });
           }
-          
+
           unawaited(_persistLiveMonitoringUpdate('yawned'));
         }
         _eyesWereClosed = false;
@@ -257,14 +255,18 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
     await _alertPlayer.setReleaseMode(ReleaseMode.loop);
     await _alertPlayer.play(AssetSource('sounds/warning.mp3'));
 
+    final theme = Theme.of(context);
+    final Color accentGreen = theme.colorScheme.primary;
+    final Color accentRed = Colors.redAccent;
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        backgroundColor: Colors.black,
-        title: const Text(
+        backgroundColor: theme.cardColor,
+        title: Text(
           'Excessive Yawning Detected',
-          style: TextStyle(color: _accentRed),
+          style: TextStyle(color: accentRed),
         ),
         content: const Text(
           'You have yawned more than 5 times. Please take a break or find a safe place to rest.',
@@ -278,7 +280,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               Navigator.of(context).pop();
               _yawnAlertShown = false;
             },
-            child: const Text('OK', style: TextStyle(color: _accentGreen)),
+            child: Text('OK', style: TextStyle(color: accentGreen)),
           ),
         ],
       ),
@@ -290,7 +292,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
     await flutterTts.setLanguage("en-US");
     await flutterTts.setSpeechRate(0.5);
     await flutterTts.speak(
-        "Driver wake up. You appear tired. Please stay alert.");
+      "Driver wake up. You appear tired. Please stay alert.",
+    );
   }
 
   /// 🚨 ALERT UI (SAFE)
@@ -307,8 +310,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         backgroundColor: Colors.black,
-        title: const Text("Wake Up!",
-            style: TextStyle(color: Colors.red)),
+        title: const Text("Wake Up!", style: TextStyle(color: Colors.red)),
         content: const Text(
           "You look drowsy. Please stay alert!",
           style: TextStyle(color: Colors.white),
@@ -321,8 +323,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               Navigator.of(context).pop();
               alertShown = false;
             },
-            child: const Text("OK",
-                style: TextStyle(color: Colors.green)),
+            child: const Text("OK", style: TextStyle(color: Colors.green)),
           ),
         ],
       ),
@@ -457,27 +458,34 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color backgroundColor = theme.scaffoldBackgroundColor;
+    final Color cardColor = theme.cardColor;
+    final Color secondaryText =
+        theme.textTheme.bodyMedium?.color?.withOpacity(0.7) ?? Colors.white70;
+    final Color accentGreen = theme.colorScheme.primary;
+    final Color accentRed = Colors.redAccent;
+
     return Scaffold(
-      backgroundColor: _bgColor,
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             children: [
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Live Monitoring',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: theme.textTheme.bodyLarge?.color,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
+                    icon: Icon(Icons.close, color: theme.iconTheme.color),
                     onPressed: () async {
                       await _saveLiveMonitoringSessionSummary();
                       if (!mounted) {
@@ -485,7 +493,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
                       }
                       Navigator.pop(context);
                     },
-                  )
+                  ),
                 ],
               ),
 
@@ -494,22 +502,74 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               _statusSection(),
 
               const SizedBox(height: 20),
-              
+
               _yawnCounterCard(),
 
               const SizedBox(height: 20),
 
-              Container(
-                width: 190,
-                height: 280,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.greenAccent, width: 3),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: _controller == null ||
-                        !_controller!.value.isInitialized
-                    ? const Center(child: CircularProgressIndicator())
-                    : CameraPreview(_controller!),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: _showCameraPreview
+                    ? Container(
+                        key: const ValueKey<String>('camera-preview'),
+                        width: double.infinity,
+                        height: 280,
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          border: Border.all(
+                            color: accentGreen.withOpacity(0.28),
+                            width: 1.2,
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child:
+                            _controller == null ||
+                                !_controller!.value.isInitialized
+                            ? const Center(child: CircularProgressIndicator())
+                            : CameraPreview(_controller!),
+                      )
+                    : Container(
+                        key: const ValueKey<String>('camera-placeholder'),
+                        width: double.infinity,
+                        height: 280,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          border: Border.all(
+                            color: accentGreen.withOpacity(0.16),
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.visibility_off_outlined,
+                              size: 42,
+                              color: accentGreen,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Camera preview hidden',
+                              style: TextStyle(
+                                color: theme.textTheme.bodyLarge?.color,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Monitoring continues in the background while the preview is off.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: secondaryText,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
               ),
 
               const SizedBox(height: 20),
@@ -517,10 +577,37 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               Row(
                 children: [
                   Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 54),
+                        side: BorderSide(color: accentGreen.withOpacity(0.35)),
+                        backgroundColor: cardColor,
+                        foregroundColor: theme.textTheme.bodyLarge?.color,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: _toggleCameraPreview,
+                      icon: Icon(
+                        _showCameraPreview
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      label: Text(
+                        _showCameraPreview ? 'Hide Preview' : 'Show Preview',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _accentRed,
+                        backgroundColor: accentRed,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       onPressed: () async {
                         await _saveLiveMonitoringSessionSummary();
@@ -529,7 +616,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
                         }
                         Navigator.pop(context);
                       },
-                      child: const Text("Stop Monitoring"),
+                      child: const Text('Stop Monitoring'),
                     ),
                   ),
                 ],
@@ -542,17 +629,18 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
   }
 
   Widget _yawnCounterCard() {
-    final Color yawnColor = _yawnCount >= 5 ? _accentRed : _accentOrange;
+    final theme = Theme.of(context);
+    final Color yawnColor = _yawnCount >= 5
+        ? Colors.redAccent
+        : Colors.orangeAccent;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: yawnColor.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: yawnColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -562,11 +650,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
             children: [
               const Text(
                 'Yawn Count',
-                style: TextStyle(
-                  color: _textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 4),
               Text(
@@ -586,7 +670,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              _yawnCount >= 5 ? '⚠️ High' : _yawnCount > 0 ? '⚡ Active' : '✓ None',
+              _yawnCount >= 5
+                  ? '⚠️ High'
+                  : _yawnCount > 0
+                  ? '⚡ Active'
+                  : '✓ None',
               style: TextStyle(
                 color: yawnColor,
                 fontSize: 12,
@@ -600,24 +688,28 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
   }
 
   Widget _statusSection() {
+    final theme = Theme.of(context);
+    final Color accentGreen = theme.colorScheme.primary;
+    final Color secondaryText =
+        theme.textTheme.bodyMedium?.color?.withOpacity(0.7) ?? Colors.white70;
+
     return Container(
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _accentGreen.withValues(alpha: 0.3)),
+        border: Border.all(color: accentGreen.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Eye Status',
-                    style: TextStyle(color: _textSecondary, fontSize: 12),
+                    style: TextStyle(color: secondaryText, fontSize: 12),
                   ),
                   const SizedBox(height: 5),
                   Text(
@@ -632,7 +724,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
             ),
           ),
 
-          Container(width: 1, height: 50, color: Colors.grey),
+          Container(width: 1, height: 50, color: theme.dividerColor),
 
           Expanded(
             child: Padding(
@@ -640,9 +732,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Fatigue Status',
-                    style: TextStyle(color: _textSecondary, fontSize: 12),
+                    style: TextStyle(color: secondaryText, fontSize: 12),
                   ),
                   const SizedBox(height: 5),
                   Text(
@@ -651,8 +743,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
                       color: fatigueStatus.contains("Normal")
                           ? Colors.green
                           : fatigueStatus.contains("Drowsy")
-                              ? Colors.orange
-                              : Colors.red,
+                          ? Colors.orange
+                          : Colors.red,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
