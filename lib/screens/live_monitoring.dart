@@ -1,206 +1,275 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+
+import '../services/fatigue_detector_service.dart';
+import '../widgets/fatigue_gauge.dart';
+import '../widgets/status_section.dart';
 
 class LiveMonitoringScreen extends StatefulWidget {
   const LiveMonitoringScreen({super.key});
-
-  static const Color _bgColor = Color(0xFF121212);
-  static const Color _surfaceColor = Color(0xFF1C1C1E);
-  static const Color _textSecondary = Color(0xFFA0A0A0);
-  static const Color _accentGreen = Color(0xFF65F58B);
-  static const Color _accentYellow = Color(0xFFFFD60A);
-  static const Color _accentRed = Color(0xFFFF453A);
 
   @override
   State<LiveMonitoringScreen> createState() => _LiveMonitoringScreenState();
 }
 
-class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
+class _LiveMonitoringScreenState extends State<LiveMonitoringScreen>
+    with WidgetsBindingObserver {
   CameraController? _controller;
   List<CameraDescription>? cameras;
+  final FatigueDetectorService _detectorService = FatigueDetectorService();
+  final FlutterTts flutterTts = FlutterTts();
+
+  bool isProcessing = false;
+  DateTime? lastProcessed;
+  int frameSkip = 0;
+
+  // Eye detection
+  bool eyesClosed = false;
+  int closedEyeFrames = 0;
+
+  // Yawn detection
+  bool yawning = false;
+  int yawnFrames = 0;
+
+  // Fatigue
+  String fatigueStatus = "Normal";
+
+  // Timer logic
+  DateTime? eyesClosedStart;
+  DateTime? yawnStart;
+  bool alertShown = false;
+  Timer? timer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     initCamera();
+
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      checkEyeClosure();
+    });
   }
 
   Future<void> initCamera() async {
-    cameras = await availableCameras();
+    try {
+      cameras = await availableCameras();
+      if (cameras == null || cameras!.isEmpty) return;
 
-    _controller = CameraController(
-      cameras![1], // front camera (change to 0 if error)
-      ResolutionPreset.medium,
-      enableAudio: false,
+      // Select Front camera
+      final frontCamera = cameras!.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras![0],
+      );
+
+      _controller = CameraController(
+        frontCamera,
+        ResolutionPreset.low,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.nv21,
+      );
+
+      await _controller!.initialize();
+      
+      if (!mounted) return;
+      
+      _controller!.startImageStream(processCameraImage);
+      setState(() {});
+    } catch (e) {
+      debugPrint('Camera Init Error: $e');
+    }
+  }
+
+  Future<void> processCameraImage(CameraImage image) async {
+    if (isProcessing) return;
+
+    frameSkip++;
+    if (frameSkip % 3 != 0) return;
+
+    final now = DateTime.now();
+    if (lastProcessed != null &&
+        now.difference(lastProcessed!).inMilliseconds < 700) {
+      return;
+    }
+
+    lastProcessed = now;
+    isProcessing = true;
+
+    try {
+      final result = await _detectorService.detectFromCameraImage(image);
+
+      if (result.faceFound) {
+        final left = result.leftEyeOpenProb;
+        final right = result.rightEyeOpenProb;
+
+        if (left < 0.6 && right < 0.6) {
+          closedEyeFrames++;
+        } else {
+          closedEyeFrames = 0;
+        }
+
+        eyesClosed = closedEyeFrames > 2;
+
+        if (result.yawning) {
+          yawnFrames++;
+        } else {
+          yawnFrames = 0;
+        }
+
+        yawning = yawnFrames > 1;
+      } else {
+        eyesClosed = false;
+        yawning = false;
+        closedEyeFrames = 0;
+        yawnFrames = 0;
+      }
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('ML ERROR: $e');
+    }
+
+    isProcessing = false;
+  }
+
+  void checkEyeClosure() {
+    if (!mounted) return;
+
+    final DateTime now = DateTime.now();
+
+    if (eyesClosed) {
+      eyesClosedStart ??= now;
+    } else {
+      eyesClosedStart = null;
+    }
+
+    if (yawning) {
+      yawnStart ??= now;
+    } else {
+      yawnStart = null;
+    }
+
+    final Duration eyeDuration = eyesClosedStart == null
+        ? Duration.zero
+        : now.difference(eyesClosedStart!);
+    final Duration yawnDuration = yawnStart == null
+        ? Duration.zero
+        : now.difference(yawnStart!);
+
+    final bool sleepy =
+        eyeDuration.inSeconds >= 5 ||
+        (eyesClosed && yawnDuration.inSeconds >= 2) ||
+        yawnDuration.inSeconds >= 4;
+    final bool drowsy = eyesClosed || yawning;
+
+    setState(() {
+      if (sleepy) {
+        fatigueStatus = "Sleepy 😴";
+      } else if (drowsy) {
+        fatigueStatus = "Drowsy 😐";
+      } else {
+        fatigueStatus = "Normal 😊";
+      }
+    });
+
+    if (sleepy && !alertShown) {
+      alertShown = true;
+      showAlert();
+      speakAlert();
+    }
+
+    if (!sleepy) {
+      alertShown = false;
+    }
+  }
+
+  Future<void> speakAlert() async {
+    await flutterTts.setLanguage("en-US");
+    await flutterTts.setSpeechRate(0.5);
+    await flutterTts.speak("Driver wake up. You appear tired. Please stay alert.");
+  }
+
+  void showAlert() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: const Text("Wake Up!", style: TextStyle(color: Colors.red)),
+        content: const Text("You look drowsy. Please stay alert!", style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              alertShown = false;
+            },
+            child: const Text("OK", style: TextStyle(color: Colors.green)),
+          ),
+        ],
+      ),
     );
-
-    await _controller!.initialize();
-
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    timer?.cancel();
     _controller?.dispose();
+    _detectorService.dispose();
+    flutterTts.stop();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgColor,
+      backgroundColor: const Color(0xFF0D0F1A),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-              // 🔴 TOP BAR
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    "Live Monitoring",
-                    style: TextStyle(color: Colors.white, fontSize: 18),
-                  ),
+                  const Text("Live Monitoring", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white),
                     onPressed: () => Navigator.pop(context),
-                  )
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                "Real-time fatigue tracking",
-                style: TextStyle(color: _textSecondary, fontSize: 16),
-              ),
-
               const SizedBox(height: 20),
-
-              // ✅ STATUS SECTION
-              _statusSection(),
-
-              const SizedBox(height: 28),
-
-              // 🎥 CAMERA FACE BOX
-              Container(
-                width: 200,
-                height: 280,
-                decoration: BoxDecoration(
-                  color: _surfaceColor,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: _controller == null || !_controller!.value.isInitialized
-                    ? const Center(child: CircularProgressIndicator())
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: CameraPreview(_controller!),
-                      ),
+              StatusSection(
+                eyesClosed: eyesClosed,
+                fatigueStatus: fatigueStatus,
               ),
-
+              const SizedBox(height: 40),
+              FatigueGauge(
+                fatigueStatus: fatigueStatus,
+                eyesClosed: eyesClosed,
+              ),
+              if (_controller != null && _controller!.value.isInitialized)
+                const SizedBox(height: 10), // Preview is offstage/hidden as per your requirement
               const Spacer(),
-
-              // 🔴 BOTTOM BUTTONS
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _accentRed,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        minimumSize: const Size(double.infinity, 56),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Stop Monitoring"),
-                    ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  const SizedBox(width: 12),
-                  FloatingActionButton(
-                    backgroundColor: _accentYellow,
-                    foregroundColor: _bgColor,
-                    elevation: 0,
-                    onPressed: () {},
-                    child: const Icon(Icons.call),
-                  ),
-                ],
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Stop Monitoring", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  // ✅ STATUS BOX (JOINED)
-  Widget _statusSection() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: _surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Row(
-        children: [
-
-          // LEFT
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Row(
-                    children: [
-                      Icon(Icons.remove_red_eye, size: 16, color: Colors.green),
-                      SizedBox(width: 6),
-                      Text("Eye Status",
-                          style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                  SizedBox(height: 5),
-                  Text("Eyes Open",
-                      style: TextStyle(
-                          color: Colors.greenAccent,
-                          fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-          ),
-
-          // DIVIDER
-          Container(width: 1, height: 50, color: Colors.grey),
-
-          // RIGHT
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Row(
-                    children: [
-                      Icon(Icons.circle, size: 10, color: _accentGreen),
-                      SizedBox(width: 6),
-                      Text("Fatigue Score",
-                          style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                  SizedBox(height: 5),
-                  Text("10%",
-                      style: TextStyle(
-                          color: Colors.greenAccent,
-                          fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

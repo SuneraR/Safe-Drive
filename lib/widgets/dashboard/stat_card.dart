@@ -7,9 +7,6 @@ class StatCard extends StatelessWidget {
   final Color iconBgColor;
   final Color iconColor;
 
-  static const Color _surfaceColor = Color(0xFF1C1C1E);
-  static const Color _textSecondary = Color(0xFFA0A0A0);
-
   const StatCard({
     super.key,
     required this.icon,
@@ -21,16 +18,24 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: _surfaceColor,
+        /// ✅ CARD COLOR FROM THEME
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
+
+        /// ✅ OPTIONAL BORDER (better in light mode)
+        border: Border.all(
+          color: theme.colorScheme.outline.withOpacity(0.1),
+        ),
       ),
       child: Row(
         children: [
-          // ICON BOX
+          // ICON BOX (keep as is — customizable)
           Container(
             width: 45,
             height: 45,
@@ -50,13 +55,19 @@ class StatCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(color: _textSecondary, fontSize: 13),
+                  style: TextStyle(
+                    /// ✅ SECONDARY TEXT
+                    color: theme.textTheme.bodyMedium!.color!
+                        .withOpacity(0.6),
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   value,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    /// ✅ MAIN TEXT
+                    color: theme.textTheme.bodyLarge!.color,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
