@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:safe_drive/firebase_options.dart';
 import 'services/app_notification_service.dart';
 import 'services/ride_background_service.dart';
 import 'screens/history.dart';
+import 'screens/loading.dart';
 import 'screens/settings.dart';
 import 'screens/dashboard.dart';
 import 'screens/login.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+Future<void> _bootstrapApp() async {
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -19,6 +20,12 @@ Future<void> main() async {
   } catch (_) {
     // App still runs if Firebase isn't configured in this build flavor.
   }
+}
+
+final Future<void> _bootstrapFuture = _bootstrapApp();
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -41,8 +48,18 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const RootNavigationScreen(),
       },
 
-      // 👉 Start from Login
-      home: const Login(),
+      // 👉 Start with the loading screen while Firebase/services boot.
+      home: FutureBuilder<void>(
+        future: _bootstrapFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const SafeDriveLoading();
+          }
+
+          final user = FirebaseAuth.instance.currentUser;
+          return user == null ? const Login() : const RootNavigationScreen();
+        },
+      ),
     );
   }
 }
@@ -68,10 +85,7 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
 
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(24, 0, 24, 12),
@@ -80,7 +94,7 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFF111318),
             borderRadius: BorderRadius.circular(38),
-              border: Border.all(color: Colors.black.withValues(alpha: 0.35)),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.35)),
           ),
           child: Row(
             children: [

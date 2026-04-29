@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth/auth_textfield.dart';
 import '../widgets/auth/auth_button.dart';
+import '../main.dart';
+import 'loading.dart';
 
 class Signup extends StatefulWidget {
   const Signup({super.key});
@@ -59,11 +61,19 @@ class _SignupState extends State<Signup> {
       showMessage("Signup Successful ✅");
 
       // 👉 Go to Home
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              const SafeDriveLoading(nextScreen: RootNavigationScreen()),
+        ),
+      );
     } on FirebaseAuthException catch (e) {
       showMessage(e.message ?? "Signup failed");
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
