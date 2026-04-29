@@ -6,6 +6,7 @@ import 'package:safe_drive/firebase_options.dart';
 import 'services/app_notification_service.dart';
 import 'services/ride_background_service.dart';
 import 'screens/history.dart';
+import 'screens/app_settings_provider.dart';
 import 'screens/loading.dart';
 import 'screens/settings.dart';
 import 'screens/dashboard.dart';
@@ -19,6 +20,7 @@ Future<void> _bootstrapApp() async {
     );
     await AppNotificationService.instance.initialize();
     await RideBackgroundService.instance.initialize();
+    await AppSettingsNotifier.instance.initialize();
   } catch (_) {
     // App still runs if Firebase isn't configured in this build flavor.
   }
@@ -36,8 +38,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ThemeNotifier(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: AppSettingsNotifier.instance),
+        ChangeNotifierProvider(create: (_) => ThemeNotifier()),
+      ],
       child: Consumer<ThemeNotifier>(
         builder: (context, themeProvider, _) {
           return MaterialApp(

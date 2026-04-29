@@ -28,11 +28,15 @@ class FatigueDetectionService {
     this.evaluationInterval = const Duration(seconds: 2),
     this.sampleInterval = const Duration(milliseconds: 120),
     this.maxWindowSamples = 90,
+    this.warningThreshold = 0.58,
+    this.criticalThreshold = 0.78,
   });
 
   final Duration evaluationInterval;
   final Duration sampleInterval;
   final int maxWindowSamples;
+  final double warningThreshold;
+  final double criticalThreshold;
 
   final StreamController<FatigueDetectionUpdate> _updatesController =
       StreamController<FatigueDetectionUpdate>.broadcast();
@@ -177,6 +181,8 @@ class FatigueDetectionService {
       'accelerometer': List<double>.from(_accelerometerMagnitudeWindow),
       'gyroscope': List<double>.from(_gyroscopeMagnitudeWindow),
       'pitch': List<double>.from(_pitchWindow),
+      'warningThreshold': warningThreshold,
+      'criticalThreshold': criticalThreshold,
     };
 
     try {
@@ -360,6 +366,8 @@ Map<String, Object> _computeFatigueSignals(Map<String, Object> payload) {
   final List<double> gyroscope = (payload['gyroscope'] as List<dynamic>)
       .cast<double>();
   final List<double> pitch = (payload['pitch'] as List<dynamic>).cast<double>();
+  final double warningThreshold = payload['warningThreshold'] as double;
+  final double criticalThreshold = payload['criticalThreshold'] as double;
 
   final List<double> accelDiff = _diff(accelerometer);
 
@@ -392,9 +400,9 @@ Map<String, Object> _computeFatigueSignals(Map<String, Object> payload) {
   );
 
   FatigueRiskLevel level = FatigueRiskLevel.normal;
-  if (score >= 0.78) {
+  if (score >= criticalThreshold) {
     level = FatigueRiskLevel.critical;
-  } else if (score >= 0.58) {
+  } else if (score >= warningThreshold) {
     level = FatigueRiskLevel.warning;
   }
 

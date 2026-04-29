@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
+import 'package:provider/provider.dart';
 import '../controllers/fatigue_monitoring_controller.dart';
+import 'app_settings_provider.dart';
 import '../services/app_notification_service.dart';
 import '../services/fatigue_detection_service.dart';
 import '../services/ride_background_service.dart';
@@ -24,7 +26,8 @@ class Dashboard extends StatefulWidget {
 }
 
 class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
-  late final FatigueMonitoringController _fatigueController;
+  late final AppSettingsNotifier _appSettings;
+  late FatigueMonitoringController _fatigueController;
   late final AudioPlayer _warningPlayer;
   late final TripHistoryService _tripHistoryService;
   late final Future<String> _userNameFuture;
@@ -44,24 +47,24 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    _appSettings = context.read<AppSettingsNotifier>();
+    _appSettings.addListener(_handleSettingsChanged);
+
     _warningPlayer = AudioPlayer();
     _tripHistoryService = TripHistoryService();
     _userNameFuture = _loadUserName();
 
-    _fatigueController = FatigueMonitoringController(
-      service: FatigueDetectionService(),
-    );
-    _fatigueController.onWarning = _handleFatigueWarning;
-    _fatigueController.state.addListener(_onFatigueStateChanged);
+    _createFatigueController();
     Future<void>.microtask(_syncPendingTrips);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _appSettings.removeListener(_handleSettingsChanged);
     _fatigueController.state.removeListener(_onFatigueStateChanged);
+    unawaited(_fatigueController.dispose());
     _warningPlayer.dispose();
-    _fatigueController.dispose();
     super.dispose();
   }
 
@@ -72,6 +75,28 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
 
   void _onFatigueStateChanged() {
     _latestFatigueScore = _fatigueController.state.value.score;
+  }
+
+  void _handleSettingsChanged() {
+    if (!mounted || _fatigueController.state.value.isRideActive) {
+      return;
+    }
+
+    _fatigueController.state.removeListener(_onFatigueStateChanged);
+    unawaited(_fatigueController.dispose());
+    _createFatigueController();
+    setState(() {});
+  }
+
+  void _createFatigueController() {
+    _fatigueController = FatigueMonitoringController(
+      service: FatigueDetectionService(
+        warningThreshold: _appSettings.warningThreshold,
+        criticalThreshold: _appSettings.criticalThreshold,
+      ),
+    );
+    _fatigueController.onWarning = _handleFatigueWarning;
+    _fatigueController.state.addListener(_onFatigueStateChanged);
   }
 
   Future<void> _syncPendingTrips() async {
@@ -174,13 +199,15 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
         ? 'Critical fatigue risk'
         : 'Fatigue warning';
 
-    unawaited(
-      AppNotificationService.instance.showFatigueWarning(
-        title: prefix,
-        body: update.reason,
-        critical: critical,
-      ),
-    );
+    if (_appSettings.notificationsEnabled) {
+      unawaited(
+        AppNotificationService.instance.showFatigueWarning(
+          title: prefix,
+          body: update.reason,
+          critical: critical,
+        ),
+      );
+    }
 
     if (_isAppForeground) {
       if (await Vibration.hasVibrator()) {
@@ -189,8 +216,10 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
         await HapticFeedback.heavyImpact();
       }
 
-      await _warningPlayer.stop();
-      await _warningPlayer.play(AssetSource('sounds/warning.mp3'));
+      if (_appSettings.alertSoundEnabled) {
+        await _warningPlayer.stop();
+        await _warningPlayer.play(AssetSource('sounds/warning.mp3'));
+      }
     }
 
     if (!mounted) {

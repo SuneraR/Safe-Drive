@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+
+import 'app_settings_provider.dart';
+import 'theme_provider.dart';
 import '../widgets/setting/sensitivity_selector.dart';
 import '../widgets/setting/settings_action_button.dart';
 import '../widgets/setting/settings_card.dart';
 import '../widgets/setting/settings_info_row.dart';
 import '../widgets/setting/settings_section_header.dart';
 import '../widgets/setting/settings_switch_tile.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
-import 'theme_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -17,14 +19,43 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _alertSound = true;
-  bool _notifications = true;
-  String _sensitivity = 'Medium';
+  Future<void> _showPrivacyPolicy() async {
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Privacy Policy'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'SafeDrive uses sensor data, notifications, and local trip history to detect fatigue and improve driving safety. '
+              'Your ride data may be stored locally and, when signed in, synced to Firebase for your account. '
+              'You can disable notifications and alert sound from Settings at any time.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _signOut() async {
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeNotifier>(
-      builder: (context, themeProvider, _) {
+    return Consumer2<ThemeNotifier, AppSettingsNotifier>(
+      builder: (context, themeProvider, appSettings, _) {
         final theme = Theme.of(context);
         final Color accentGreen = theme.colorScheme.primary;
 
@@ -59,18 +90,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: Icons.volume_up_outlined,
                           title: 'Alert Sound',
                           subtitle: 'Play sound when fatigue detected',
-                          value: _alertSound,
+                          value: appSettings.alertSoundEnabled,
                           accentColor: accentGreen,
-                          onChanged: (val) => setState(() => _alertSound = val),
+                          onChanged: (val) {
+                            appSettings.setAlertSoundEnabled(val);
+                          },
                         ),
                         SettingsSwitchTile(
                           icon: Icons.notifications_active_outlined,
                           title: 'Notifications',
                           subtitle: 'Receive trip summaries',
-                          value: _notifications,
+                          value: appSettings.notificationsEnabled,
                           accentColor: accentGreen,
-                          onChanged: (val) =>
-                              setState(() => _notifications = val),
+                          onChanged: (val) {
+                            appSettings.setNotificationsEnabled(val);
+                          },
                         ),
                       ],
                     ),
@@ -84,9 +118,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SettingsCard(
                     child: SensitivitySelector(
                       options: const ['Low', 'Medium', 'High'],
-                      selectedValue: _sensitivity,
+                      selectedValue: appSettings.sensitivityLabel,
                       accentColor: accentGreen,
-                      onChanged: (val) => setState(() => _sensitivity = val),
+                      onChanged: (val) {
+                        appSettings.setSensitivity(val);
+                      },
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -123,12 +159,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  const SettingsActionButton(text: 'Privacy Policy'),
+                  SettingsActionButton(
+                    text: 'Privacy Policy',
+                    onPressed: _showPrivacyPolicy,
+                  ),
                   const SizedBox(height: 12),
                   SettingsActionButton(
                     text: 'Sign Out',
                     textColor: Colors.redAccent,
-                    onPressed: () => FirebaseAuth.instance.signOut(),
+                    onPressed: _signOut,
                   ),
                 ],
               ),
