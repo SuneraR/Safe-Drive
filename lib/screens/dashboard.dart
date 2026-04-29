@@ -215,11 +215,11 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
       } else {
         await HapticFeedback.heavyImpact();
       }
+    }
 
-      if (_appSettings.alertSoundEnabled) {
-        await _warningPlayer.stop();
-        await _warningPlayer.play(AssetSource('sounds/warning.mp3'));
-      }
+    if (_appSettings.alertSoundEnabled) {
+      await _warningPlayer.stop();
+      await _warningPlayer.play(AssetSource('sounds/warning.mp3'));
     }
 
     if (!mounted) {
