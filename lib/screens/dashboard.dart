@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -25,6 +27,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
   late final FatigueMonitoringController _fatigueController;
   late final AudioPlayer _warningPlayer;
   late final TripHistoryService _tripHistoryService;
+  late final Future<String> _userNameFuture;
 
   bool _isAppForeground = true;
 
@@ -43,6 +46,7 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
 
     _warningPlayer = AudioPlayer();
     _tripHistoryService = TripHistoryService();
+    _userNameFuture = _loadUserName();
 
     _fatigueController = FatigueMonitoringController(
       service: FatigueDetectionService(),
@@ -72,6 +76,50 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
 
   Future<void> _syncPendingTrips() async {
     await _tripHistoryService.syncPendingTrips();
+  }
+
+  Future<String> _loadUserName() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return 'driver';
+    }
+
+    final String? authName = user.displayName?.trim();
+    if (authName != null && authName.isNotEmpty) {
+      return authName;
+    }
+
+    final DocumentSnapshot<Map<String, dynamic>> snapshot =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+    final String? firestoreName = snapshot.data()?['name']?.toString().trim();
+    if (firestoreName != null && firestoreName.isNotEmpty) {
+      return firestoreName;
+    }
+
+    final String? email = user.email?.trim();
+    if (email != null && email.isNotEmpty) {
+      return email.split('@').first;
+    }
+
+    return 'driver';
+  }
+
+  String _greetingPrefix() {
+    final int hour = DateTime.now().hour;
+
+    if (hour < 12) {
+      return 'Good morning';
+    }
+
+    if (hour < 17) {
+      return 'Good afternoon';
+    }
+
+    return 'Good evening';
   }
 
   Future<void> _toggleRide() async {
@@ -275,9 +323,20 @@ class _DashboardState extends State<Dashboard> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                "Good evening, driver",
-                style: TextStyle(color: _textSecondary, fontSize: 16),
+              FutureBuilder<String>(
+                future: _userNameFuture,
+                builder:
+                    (BuildContext context, AsyncSnapshot<String> snapshot) {
+                      final String name = snapshot.data ?? 'driver';
+
+                      return Text(
+                        '${_greetingPrefix()}, $name',
+                        style: const TextStyle(
+                          color: _textSecondary,
+                          fontSize: 16,
+                        ),
+                      );
+                    },
               ),
               const SizedBox(height: 32),
               const DriverStatusCard(),
