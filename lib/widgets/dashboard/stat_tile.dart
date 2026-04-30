@@ -15,21 +15,36 @@ class StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return DashboardCard(
       child: Row(
         children: [
-          Icon(icon, color: Colors.green, size: 28),
+          /// ✅ ICON COLOR FROM THEME
+          Icon(
+            icon,
+            color: theme.colorScheme.primary,
+            size: 28,
+          ),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(
+                /// ✅ SECONDARY TEXT
+                color: theme.textTheme.bodyMedium!.color!
+                    .withOpacity(0.6),
+              ),
             ),
           ),
+
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              /// ✅ MAIN TEXT
+              color: theme.textTheme.bodyLarge!.color,
               fontWeight: FontWeight.bold,
             ),
           ),

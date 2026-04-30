@@ -1,14 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'package:safe_drive/firebase_options.dart';
+import 'services/app_notification_service.dart';
+import 'services/ride_background_service.dart';
 import 'screens/history.dart';
+import 'screens/app_settings_provider.dart';
+import 'screens/loading.dart';
 import 'screens/settings.dart';
 import 'screens/dashboard.dart';
 import 'screens/login.dart';
+import 'package:safe_drive/Providers/theme_provider.dart';
 
-void main() async {
+Future<void> _bootstrapApp() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await AppNotificationService.instance.initialize();
+    await RideBackgroundService.instance.initialize();
+    await AppSettingsNotifier.instance.initialize();
+  } catch (_) {
+    // App still runs if Firebase isn't configured in this build flavor.
+  }
+}
+
+final Future<void> _bootstrapFuture = _bootstrapApp();
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // 🔥 IMPORTANT
   runApp(const MyApp());
 }
 
@@ -17,22 +38,73 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Safe Drive',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFF121212),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: AppSettingsNotifier.instance),
+        ChangeNotifierProvider(create: (_) => ThemeNotifier()),
+      ],
+      child: Consumer<ThemeNotifier>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp(
+            title: 'Safe Drive',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              useMaterial3: true,
+              brightness: Brightness.light,
+              scaffoldBackgroundColor: Colors.white,
+              primaryColor: Colors.green,
+              cardColor: const Color(0xFFF5F5F5),
+              colorScheme: const ColorScheme.light(
+                primary: Colors.green,
+                secondary: Colors.greenAccent,
+                onPrimary: Colors.white,
+              ),
+              textTheme: const TextTheme(
+                bodyLarge: TextStyle(color: Colors.black),
+                bodyMedium: TextStyle(color: Colors.black87),
+              ),
+            ),
+            darkTheme: ThemeData(
+              useMaterial3: true,
+              brightness: Brightness.dark,
+              scaffoldBackgroundColor: const Color(0xFF121212),
+              primaryColor: const Color(0xFF65F58B),
+              cardColor: const Color(0xFF1C1C1E),
+              colorScheme: const ColorScheme.dark(
+                primary: Color(0xFF65F58B),
+                secondary: Colors.greenAccent,
+                onPrimary: Colors.black,
+              ),
+              textTheme: const TextTheme(
+                bodyLarge: TextStyle(color: Colors.white),
+                bodyMedium: TextStyle(color: Colors.white70),
+              ),
+            ),
+            themeMode: themeProvider.isDark ? ThemeMode.dark : ThemeMode.light,
+
+            // ✅ Routes for navigation
+            routes: {
+              '/login': (context) => const Login(),
+              '/home': (context) => const RootNavigationScreen(),
+            },
+
+            // 👉 Start with the loading screen while Firebase/services boot.
+            home: FutureBuilder<void>(
+              future: _bootstrapFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const SafeDriveLoading();
+                }
+
+                final user = FirebaseAuth.instance.currentUser;
+                return user == null
+                    ? const Login()
+                    : const RootNavigationScreen();
+              },
+            ),
+          );
+        },
       ),
-
-      // ✅ Routes for navigation
-      routes: {
-        '/login': (context) => const Login(),
-        '/home': (context) => const RootNavigationScreen(),
-      },
-
-      // 👉 Start from Login
-      home: const Login(),
     );
   }
 }
@@ -58,10 +130,7 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
 
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(24, 0, 24, 12),
@@ -70,7 +139,7 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFF111318),
             borderRadius: BorderRadius.circular(38),
-            border: Border.all(color: Colors.black.withOpacity(0.35)),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.35)),
           ),
           child: Row(
             children: [

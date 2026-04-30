@@ -1,26 +1,43 @@
 {
   "project_info": {
-    "project_number": "495256617760",
-    "project_id": "safe-drive-a4b50",
-    "storage_bucket": "safe-drive-a4b50.firebasestorage.app"
+    "project_number": "474087755126",
+    "project_id": "safe-drive-95876",
+    "storage_bucket": "safe-drive-95876.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:495256617760:android:dac4342e1e3fa39f7c4d45",
+        "mobilesdk_app_id": "1:474087755126:android:65d92d63f34b7ed2cbbe57",
         "android_client_info": {
           "package_name": "com.example.safe_drive"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "474087755126-42lpgq9f5jke1rsklqp66rii4f1tgu4b.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyD1kVmhRI2X7bym_Y78FKnXFlUnBh7QjHc"
+          "current_key": "AIzaSyCKSe_-Ihv22CNpOPDSdqaqCFGpr1cLVHk"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "474087755126-42lpgq9f5jke1rsklqp66rii4f1tgu4b.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "474087755126-2raae219pkq53n5a02q93p7kv0gs8mbb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.safeDrive"
+              }
+            }
+          ]
         }
       }
     }
