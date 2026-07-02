@@ -4,12 +4,14 @@ class AuthTextField extends StatefulWidget {
   final String hint;
   final IconData icon;
   final bool isPassword;
+  final TextEditingController? controller; // ✅ ADD THIS
 
   const AuthTextField({
     super.key,
     required this.hint,
     required this.icon,
     this.isPassword = false,
+    this.controller, // ✅ ADD THIS
   });
 
   @override
@@ -22,9 +24,12 @@ class _AuthTextFieldState extends State<AuthTextField> {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: widget.controller, // ✅ ADD THIS
       obscureText: widget.isPassword ? _obscureText : false,
+      style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         hintText: widget.hint,
+        hintStyle: const TextStyle(color: Colors.grey),
         prefixIcon: Icon(widget.icon, color: Colors.grey),
 
         suffixIcon: widget.isPassword
@@ -45,13 +50,11 @@ class _AuthTextFieldState extends State<AuthTextField> {
 
         filled: true,
         fillColor: Colors.white10,
-        hintStyle: const TextStyle(color: Colors.grey),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
         ),
       ),
-      style: const TextStyle(color: Colors.white),
     );
   }
 }

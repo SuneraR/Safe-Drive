@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
 
-class LiveMonitoringScreen extends StatelessWidget {
+class LiveMonitoringScreen extends StatefulWidget {
   const LiveMonitoringScreen({super.key});
 
   static const Color _bgColor = Color(0xFF121212);
@@ -9,6 +10,40 @@ class LiveMonitoringScreen extends StatelessWidget {
   static const Color _accentGreen = Color(0xFF65F58B);
   static const Color _accentYellow = Color(0xFFFFD60A);
   static const Color _accentRed = Color(0xFFFF453A);
+
+  @override
+  State<LiveMonitoringScreen> createState() => _LiveMonitoringScreenState();
+}
+
+class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
+  CameraController? _controller;
+  List<CameraDescription>? cameras;
+
+  @override
+  void initState() {
+    super.initState();
+    initCamera();
+  }
+
+  Future<void> initCamera() async {
+    cameras = await availableCameras();
+
+    _controller = CameraController(
+      cameras![1], // front camera (change to 0 if error)
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+
+    await _controller!.initialize();
+
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,27 +55,19 @@ class LiveMonitoringScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
+              // 🔴 TOP BAR
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     "Live Monitoring",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 18),
                   ),
                   IconButton(
-                    style: IconButton.styleFrom(
-                      backgroundColor: _surfaceColor,
-                      foregroundColor: Colors.white,
-                    ),
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                  ),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  )
                 ],
               ),
               const SizedBox(height: 8),
@@ -49,39 +76,32 @@ class LiveMonitoringScreen extends StatelessWidget {
                 style: TextStyle(color: _textSecondary, fontSize: 16),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+
+              // ✅ STATUS SECTION
               _statusSection(),
 
               const SizedBox(height: 28),
 
+              // 🎥 CAMERA FACE BOX
               Container(
-                width: double.infinity,
+                width: 200,
                 height: 280,
-                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: _surfaceColor,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Center(
-                  child: Container(
-                    width: 220,
-                    height: 220,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _accentGreen, width: 3),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(left: 65, top: 95, child: _dot()),
-                        Positioned(right: 65, top: 95, child: _dot()),
-                      ],
-                    ),
-                  ),
-                ),
+                child: _controller == null || !_controller!.value.isInitialized
+                    ? const Center(child: CircularProgressIndicator())
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: CameraPreview(_controller!),
+                      ),
               ),
 
               const Spacer(),
 
+              // 🔴 BOTTOM BUTTONS
               Row(
                 children: [
                   Expanded(
@@ -95,16 +115,8 @@ class LiveMonitoringScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        "Stop Monitoring",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Stop Monitoring"),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -124,6 +136,7 @@ class LiveMonitoringScreen extends StatelessWidget {
     );
   }
 
+  // ✅ STATUS BOX (JOINED)
   Widget _statusSection() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -134,6 +147,8 @@ class LiveMonitoringScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
+
+          // LEFT
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -142,30 +157,26 @@ class LiveMonitoringScreen extends StatelessWidget {
                 children: const [
                   Row(
                     children: [
-                      Icon(Icons.remove_red_eye, size: 10, color: _accentGreen),
+                      Icon(Icons.remove_red_eye, size: 16, color: Colors.green),
                       SizedBox(width: 6),
-                      Text(
-                        "Eye Status",
-                        style: TextStyle(color: _textSecondary, fontSize: 13),
-                      ),
+                      Text("Eye Status",
+                          style: TextStyle(color: Colors.grey)),
                     ],
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    "Eyes Open",
-                    style: TextStyle(
-                      color: _accentGreen,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  SizedBox(height: 5),
+                  Text("Eyes Open",
+                      style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
           ),
 
-          Container(width: 1, height: 56, color: Colors.white.withOpacity(0.1)),
+          // DIVIDER
+          Container(width: 1, height: 50, color: Colors.grey),
 
+          // RIGHT
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -176,37 +187,20 @@ class LiveMonitoringScreen extends StatelessWidget {
                     children: [
                       Icon(Icons.circle, size: 10, color: _accentGreen),
                       SizedBox(width: 6),
-                      Text(
-                        "Fatigue Score",
-                        style: TextStyle(color: _textSecondary, fontSize: 13),
-                      ),
+                      Text("Fatigue Score",
+                          style: TextStyle(color: Colors.grey)),
                     ],
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    "10%",
-                    style: TextStyle(
-                      color: _accentGreen,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  SizedBox(height: 5),
+                  Text("10%",
+                      style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _dot() {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: const BoxDecoration(
-        color: _accentGreen,
-        shape: BoxShape.circle,
       ),
     );
   }

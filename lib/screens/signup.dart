@@ -1,9 +1,76 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/auth/auth_textfield.dart';
 import '../widgets/auth/auth_button.dart';
 
-class Signup extends StatelessWidget {
+class Signup extends StatefulWidget {
   const Signup({super.key});
+
+  @override
+  State<Signup> createState() => _SignupState();
+}
+
+class _SignupState extends State<Signup> {
+
+  // ✅ Controllers
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController = TextEditingController();
+
+  bool isLoading = false;
+
+  // ✅ Signup Function
+  Future<void> signUp() async {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    final confirmPassword = confirmPasswordController.text.trim();
+
+    // 🔴 Validation
+    if (email.isEmpty || password.isEmpty) {
+      showMessage("Please fill all fields");
+      return;
+    }
+
+    if (password != confirmPassword) {
+      showMessage("Passwords do not match");
+      return;
+    }
+
+    try {
+      setState(() => isLoading = true);
+
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      showMessage("Signup Successful ✅");
+
+      // 👉 Go to Home
+      Navigator.pushReplacementNamed(context, '/home');
+
+    } on FirebaseAuthException catch (e) {
+      showMessage(e.message ?? "Signup failed");
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  void showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,18 +86,12 @@ class Signup extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-                /// Logo + Title
-                Center(
+                // 🔷 Logo + Title
+                const Center(
                   child: Column(
-                    children: const [
-                      Icon(
-                        Icons.directions_car,
-                        color: Colors.white,
-                        size: 40,
-                      ),
-
+                    children: [
+                      Icon(Icons.directions_car, color: Colors.white, size: 40),
                       SizedBox(height: 10),
-
                       Text(
                         "Create Account",
                         style: TextStyle(
@@ -45,45 +106,33 @@ class Signup extends StatelessWidget {
 
                 const SizedBox(height: 40),
 
-                /// Full Name
-                const Text(
-                  "Full Name",
-                  style: TextStyle(color: Colors.white),
-                ),
-
+                // 🔹 Name
+                const Text("Full Name", style: TextStyle(color: Colors.white)),
                 const SizedBox(height: 8),
-
-                const AuthTextField(
+                AuthTextField(
+                  controller: nameController,
                   hint: "Enter your full name",
                   icon: Icons.person,
                 ),
 
                 const SizedBox(height: 20),
 
-                /// Email
-                const Text(
-                  "Email",
-                  style: TextStyle(color: Colors.white),
-                ),
-
+                // 🔹 Email
+                const Text("Email", style: TextStyle(color: Colors.white)),
                 const SizedBox(height: 8),
-
-                const AuthTextField(
+                AuthTextField(
+                  controller: emailController,
                   hint: "Enter your email",
                   icon: Icons.email,
                 ),
 
                 const SizedBox(height: 20),
 
-                /// Password
-                const Text(
-                  "Password",
-                  style: TextStyle(color: Colors.white),
-                ),
-
+                // 🔹 Password
+                const Text("Password", style: TextStyle(color: Colors.white)),
                 const SizedBox(height: 8),
-
-                const AuthTextField(
+                AuthTextField(
+                  controller: passwordController,
                   hint: "Create a password",
                   icon: Icons.lock,
                   isPassword: true,
@@ -91,15 +140,11 @@ class Signup extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                /// Confirm Password
-                const Text(
-                  "Confirm Password",
-                  style: TextStyle(color: Colors.white),
-                ),
-
+                // 🔹 Confirm Password
+                const Text("Confirm Password", style: TextStyle(color: Colors.white)),
                 const SizedBox(height: 8),
-
-                const AuthTextField(
+                AuthTextField(
+                  controller: confirmPasswordController,
                   hint: "Confirm your password",
                   icon: Icons.lock,
                   isPassword: true,
@@ -107,17 +152,17 @@ class Signup extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-                /// Signup Button
-                AuthButton(
-                  text: "Sign Up",
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                ),
+                // 🔥 Signup Button
+                isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : AuthButton(
+                        text: "Sign Up",
+                        onPressed: signUp,
+                      ),
 
                 const SizedBox(height: 20),
 
-                /// Login Navigation
+                // 🔁 Go to Login
                 Center(
                   child: GestureDetector(
                     onTap: () {
@@ -125,13 +170,10 @@ class Signup extends StatelessWidget {
                     },
                     child: const Text(
                       "Already have an account? Login",
-                      style: TextStyle(
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(color: Colors.grey),
                     ),
                   ),
                 ),
-
               ],
             ),
           ),

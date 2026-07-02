@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:safe_drive/screens/history.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'screens/history.dart';
 import 'screens/settings.dart';
-import 'screens/Dashboard.dart';
+import 'screens/dashboard.dart';
 import 'screens/login.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(); // 🔥 IMPORTANT
   runApp(const MyApp());
 }
 
@@ -20,10 +24,20 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFF121212),
       ),
+
+      // ✅ Routes for navigation
+      routes: {
+        '/login': (context) => const Login(),
+        '/home': (context) => const RootNavigationScreen(),
+      },
+
+      // 👉 Start from Login
       home: const Login(),
     );
   }
 }
+
+/// ================= ROOT NAVIGATION =================
 
 class RootNavigationScreen extends StatefulWidget {
   const RootNavigationScreen({super.key});
@@ -33,10 +47,9 @@ class RootNavigationScreen extends StatefulWidget {
 }
 
 class _RootNavigationScreenState extends State<RootNavigationScreen> {
-  int _currentIndex = 2;
+  int _currentIndex = 0;
 
   late final List<Widget> _pages = [
-    //const _PlaceholderScreen(title: 'Home'),
     const Dashboard(),
     const HistoryScreen(),
     const SettingsScreen(),
@@ -49,6 +62,7 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
         index: _currentIndex,
         children: _pages,
       ),
+
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(24, 0, 24, 12),
         child: Container(
@@ -86,6 +100,8 @@ class _RootNavigationScreenState extends State<RootNavigationScreen> {
   }
 }
 
+/// ================= NAV ITEM =================
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
@@ -122,26 +138,6 @@ class _NavItem extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 28,
-          fontWeight: FontWeight.bold,
         ),
       ),
     );
