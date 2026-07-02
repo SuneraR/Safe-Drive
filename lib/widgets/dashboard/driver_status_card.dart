@@ -5,28 +5,31 @@ import 'dashboard_card.dart';
 class DriverStatusCard extends StatelessWidget {
   const DriverStatusCard({super.key});
 
-  static const Color _textSecondary = Color(0xFFA0A0A0);
-  static const Color _accentGreen = Color(0xFF65F58B);
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return DashboardCard(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // LEFT SIDE (text only)
-          const Column(
+          // LEFT SIDE (text)
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 "Driver Status",
-                style: TextStyle(color: _textSecondary, fontSize: 14),
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium!.color!.withOpacity(0.6),
+                  fontSize: 14,
+                ),
               ),
-              SizedBox(height: 5),
+              const SizedBox(height: 5),
               Text(
                 "Safe",
                 style: TextStyle(
-                  color: _accentGreen,
+                  /// ✅ PRIMARY COLOR (auto green in both modes)
+                  color: theme.colorScheme.primary,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
@@ -34,7 +37,7 @@ class DriverStatusCard extends StatelessWidget {
             ],
           ),
 
-          // RIGHT SIDE (ring + inner circle)
+          // RIGHT SIDE
           const StatusIndicator(),
         ],
       ),

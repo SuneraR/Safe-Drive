@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth/auth_textfield.dart';
 import '../widgets/auth/auth_button.dart';
+import '../main.dart';
+import 'loading.dart';
 
 class Signup extends StatefulWidget {
   const Signup({super.key});
@@ -11,23 +14,24 @@ class Signup extends StatefulWidget {
 }
 
 class _SignupState extends State<Signup> {
-
   // ✅ Controllers
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
 
   bool isLoading = false;
 
   // ✅ Signup Function
   Future<void> signUp() async {
+    final name = nameController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
     final confirmPassword = confirmPasswordController.text.trim();
 
     // 🔴 Validation
-    if (email.isEmpty || password.isEmpty) {
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
       showMessage("Please fill all fields");
       return;
     }
@@ -40,27 +44,41 @@ class _SignupState extends State<Signup> {
     try {
       setState(() => isLoading = true);
 
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      final user = userCredential.user;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'name': name,
+          'email': email,
+          'createdAt': FieldValue.serverTimestamp(),
+          'authProvider': 'email_password',
+        });
+      }
 
       showMessage("Signup Successful ✅");
 
       // 👉 Go to Home
-      Navigator.pushReplacementNamed(context, '/home');
-
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              const SafeDriveLoading(nextScreen: RootNavigationScreen()),
+        ),
+      );
     } on FirebaseAuthException catch (e) {
       showMessage(e.message ?? "Signup failed");
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
   void showMessage(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -83,7 +101,6 @@ class _SignupState extends State<Signup> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 const SizedBox(height: 30),
 
                 // 🔷 Logo + Title
@@ -141,7 +158,10 @@ class _SignupState extends State<Signup> {
                 const SizedBox(height: 20),
 
                 // 🔹 Confirm Password
-                const Text("Confirm Password", style: TextStyle(color: Colors.white)),
+                const Text(
+                  "Confirm Password",
+                  style: TextStyle(color: Colors.white),
+                ),
                 const SizedBox(height: 8),
                 AuthTextField(
                   controller: confirmPasswordController,
@@ -155,10 +175,7 @@ class _SignupState extends State<Signup> {
                 // 🔥 Signup Button
                 isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : AuthButton(
-                        text: "Sign Up",
-                        onPressed: signUp,
-                      ),
+                    : AuthButton(text: "Sign Up", onPressed: signUp),
 
                 const SizedBox(height: 20),
 

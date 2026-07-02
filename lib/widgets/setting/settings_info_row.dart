@@ -5,29 +5,38 @@ class SettingsInfoRow extends StatelessWidget {
     super.key,
     required this.label,
     required this.value,
-    required this.labelColor,
-    this.valueColor = Colors.white,
+    this.labelColor,
   });
 
   final String label;
   final String value;
-  final Color labelColor;
-  final Color valueColor;
+  final Color? labelColor;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(color: labelColor, fontSize: 15),
-        ),
-        Text(
-          value,
-          style: TextStyle(color: valueColor, fontSize: 15),
-        ),
-      ],
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: labelColor ?? theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+              fontSize: 16,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: theme.textTheme.bodyLarge?.color,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
